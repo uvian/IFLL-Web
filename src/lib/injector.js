@@ -327,7 +327,7 @@ const IFLL_INJECTOR = (() => {
         const aiArea = document.getElementById('ifll-ai-area');
         if (aiArea) {
           let aiHtml = `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">AI Examples</div>`;
-          for (const r of result) {
+          for (const r of result.examples) {
             const ex = htmlEncode(r.en || '');
             const tcn = renderBoldHtml(r.cn || '');
             aiHtml += `<div class="ifll-tt-example ifll-tt-ai-example">"${ex}"</div>`;
