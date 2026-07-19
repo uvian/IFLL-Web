@@ -24,6 +24,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   knownCount.textContent = (settings.knownWords || []).length;
 
   renderExcludedSites(settings.excludedSites || []);
+  const excludedCountEl = document.getElementById('excludedCount');
+  if (excludedCountEl) excludedCountEl.textContent = (settings.excludedSites || []).length;
 
   async function savePartial(partial) {
     await IFLL_STORAGE.set(partial);

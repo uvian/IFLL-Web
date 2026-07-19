@@ -9,100 +9,101 @@
   --ifll-accent: #60a5fa;
 }
 
-/* ── Welcome Prompt Bar ── */
+/* ── Welcome Prompt — compact, clean, not intrusive ── */
 .ifll-prompt {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-120%);
   z-index: 2147483646;
-  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-  transform: translateY(-100%);
-  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  min-width: 420px;
+  max-width: 520px;
+  transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  overflow: hidden;
 }
 .ifll-prompt-show {
-  transform: translateY(0);
+  transform: translateX(-50%) translateY(0);
 }
 .ifll-prompt-hide {
-  transform: translateY(-100%);
-  transition-duration: 0.3s;
+  transform: translateX(-50%) translateY(-120%);
+  transition-duration: 0.25s;
   transition-timing-function: ease-in;
 }
 
 .ifll-prompt-body {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 10px 20px;
-  max-width: 800px;
-  margin: 0 auto;
+  gap: 10px;
+  padding: 10px 16px;
 }
 .ifll-prompt-icon {
-  font-size: 24px;
+  font-size: 18px;
   line-height: 1;
   flex-shrink: 0;
+  opacity: 0.7;
 }
 .ifll-prompt-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+  flex: 1;
+  min-width: 0;
 }
 .ifll-prompt-title {
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
+  display: block;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
 }
 .ifll-prompt-desc {
-  color: rgba(255,255,255,0.75);
-  font-size: 12px;
+  display: block;
+  color: #9ca3af;
+  font-size: 11px;
+  line-height: 1.3;
 }
 .ifll-prompt-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
 }
 .ifll-prompt-btn {
-  padding: 6px 16px;
   border: none;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: 6px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
+  padding: 5px 12px;
+  transition: background 0.12s;
   white-space: nowrap;
 }
-.ifll-prompt-btn:active {
-  transform: scale(0.96);
-}
 .ifll-prompt-btn-yes {
-  background: #ffffff;
-  color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
 }
 .ifll-prompt-btn-yes:hover {
-  background: #f0f9ff;
+  background: #1d4ed8;
 }
 .ifll-prompt-btn-no {
-  background: rgba(255,255,255,0.15);
-  color: rgba(255,255,255,0.9);
+  background: #f3f4f6;
+  color: #6b7280;
 }
 .ifll-prompt-btn-no:hover {
-  background: rgba(255,255,255,0.25);
+  background: #e5e7eb;
 }
 
-/* Progress bar */
+/* Thin progress line */
 .ifll-prompt-progress {
-  height: 3px;
-  background: rgba(255,255,255,0.15);
+  height: 2px;
+  background: #f3f4f6;
 }
 .ifll-prompt-bar {
   height: 100%;
   width: 100%;
-  background: rgba(255,255,255,0.6);
-  border-radius: 0 2px 2px 0;
+  background: #93c5fd;
+  transition: none;
 }
 
 /* ── Inline English word: no bg/color, just a subtle dotted underline ── */

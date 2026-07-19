@@ -48,9 +48,17 @@
         clearTimeout(timer);
         bar.classList.remove('ifll-prompt-show');
         bar.classList.add('ifll-prompt-hide');
-        setTimeout(() => {
+        setTimeout(async () => {
           bar.remove();
           sessionStorage.setItem('ifll_decision_' + hostname, accepted ? 'accepted' : 'rejected');
+          /* If user declined, remember in storage so they can manage from popup */
+          if (!accepted) {
+            const { excludedSites = [] } = await IFLL_STORAGE.get();
+            if (!excludedSites.includes(hostname)) {
+              excludedSites.push(hostname);
+              await IFLL_STORAGE.set({ excludedSites });
+            }
+          }
           resolve(accepted);
         }, 400);
       }
