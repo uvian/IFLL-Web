@@ -1,9 +1,7 @@
 /*
  * IFLL — Background Service Worker
- * Handles: settings defaults, AI API calls for examples
+ * Central AI proxy: content script sends messages, worker makes API calls
  */
-
-/* ---- Defaults on install ---- */
 chrome.runtime.onInstalled.addListener(async () => {
   await chrome.storage.sync.set({
     enabled: true,
@@ -11,31 +9,26 @@ chrome.runtime.onInstalled.addListener(async () => {
     level: 'cet4',
     knownWords: [],
     excludedSites: [],
-    apiKey: ''
+    apiKey: '',
+    apiEndpoint: 'https://api.deepseek.com',
+    apiModel: 'deepseek-chat'
   });
 });
 
-/* ---- Message relay & AI proxy ---- */
+/* ---- Handle AI requests from content script ---- */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'IFLL_AI_EXAMPLES') {
-    handleAiExamples(message.word, message.zh, message.apiKey)
+    handleAiExamples(message.en, message.zh, message.apiKey, message.apiEndpoint, message.apiModel)
       .then(sendResponse);
-    return true; // Keep channel open for async response
-  }
-  if (message.type === 'IFLL_AI_ENHANCE_REPLACEMENT') {
-    handleAiEnhancement(message.text, message.apiKey, message.level)
-      .then(sendResponse);
-    return true;
+    return true; // keep channel open for async
   }
 });
 
-/* ---- AI: generate example sentences ---- */
-async function handleAiExamples(en, zh, apiKey) {
+async function handleAiExamples(en, zh, apiKey, apiEndpoint, apiModel) {
   if (!apiKey) return { error: 'no api key' };
 
-  const baseUrl = apiKey.startsWith('sk-')
-    ? 'https://api.openai.com/v1'
-    : 'https://api.deepseek.com';
+  const baseUrl = (apiEndpoint || 'https://api.deepseek.com').replace(/\/+$/, '');
+  const model = apiModel || 'deepseek-chat';
 
   try {
     const resp = await fetch(baseUrl + '/chat/completions', {
@@ -45,11 +38,11 @@ async function handleAiExamples(en, zh, apiKey) {
         'Authorization': 'Bearer ' + apiKey
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: model,
         messages: [
           {
             role: 'system',
-            content: 'You are a language tutor. Generate 3 natural, everyday English example sentences for the given word. Return ONLY valid JSON like: {"examples":[{"en":"sentence","cn":"translation with **word** bolded"}]}'
+            content: 'You are a language tutor. Generate 3 natural, everyday English example sentences for the given word. Return ONLY valid JSON with no markdown wrapping: {"examples":[{"en":"sentence","cn":"translation with **word** bolded"}]}'
           },
           {
             role: 'user',
@@ -63,27 +56,21 @@ async function handleAiExamples(en, zh, apiKey) {
 
     if (!resp.ok) {
       const errText = await resp.text().catch(() => 'unknown');
-      return { error: `API ${resp.status}: ${errText.substring(0, 100)}` };
+      return { error: `HTTP ${resp.status}: ${errText.substring(0, 120)}` };
     }
 
     const data = await resp.json();
     const content = data.choices?.[0]?.message?.content;
     if (!content) return { error: 'empty response' };
 
-    // Parse JSON from response (handle markdown code blocks)
+    // Handle both bare JSON and markdown-wrapped JSON
     let jsonStr = content;
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (jsonMatch) jsonStr = jsonMatch[1];
+
     const parsed = JSON.parse(jsonStr);
     return { examples: parsed.examples || [] };
   } catch (err) {
     return { error: err.message };
   }
-}
-
-/* ---- AI: enhance word replacement (future) ---- */
-async function handleAiEnhancement(text, apiKey, level) {
-  /* Placeholder: this will be used for AI-powered word selection */
-  if (!apiKey) return { suggestions: [] };
-  return { suggestions: [] };
 }

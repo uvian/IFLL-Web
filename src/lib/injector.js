@@ -153,38 +153,22 @@ const IFLL_INJECTOR = (() => {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
-  /* ---- AI example fetch ---- */
-  let aiLoading = false;
-
-  async function fetchAiExamples(en, zh, apiKey) {
-    if (!apiKey || aiLoading) return null;
-    aiLoading = true;
+  /* ---- AI example fetch — routes through background worker (handles auth/networking) ---- */
+  async function fetchAiExamples(en, zh) {
+    const settings = await IFLL_STORAGE.get();
+    if (!settings.apiKey) return null;
     try {
-      /* Determine API endpoint from the key pattern */
-      const baseUrl = apiKey.startsWith('sk-') ? 'https://api.openai.com/v1' : 'https://api.deepseek.com';
-      const resp = await fetch(baseUrl + '/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            { role: 'system', content: 'You are a language tutor. Generate 3 natural English example sentences for the given word. Return ONLY JSON: {"examples":[{"en":"sentence","cn":"translation with **word** bolded"}]}' },
-            { role: 'user', content: `Word: "${en}" (${zh})` }
-          ],
-          temperature: 0.7,
-          max_tokens: 500
-        })
+      const result = await chrome.runtime.sendMessage({
+        type: 'IFLL_AI_EXAMPLES',
+        en, zh,
+        apiKey: settings.apiKey,
+        apiEndpoint: settings.apiEndpoint,
+        apiModel: settings.apiModel
       });
-      if (!resp.ok) return null;
-      const data = await resp.json();
-      const content = data.choices?.[0]?.message?.content;
-      if (!content) return null;
-      const parsed = JSON.parse(content);
-      return parsed.examples || null;
+      if (!result || result.error) return null;
+      return result.examples || null;
     } catch (_) {
       return null;
-    } finally {
-      aiLoading = false;
     }
   }
 
@@ -314,7 +298,7 @@ const IFLL_INJECTOR = (() => {
         }
         aiBtn.textContent = '⏳ 生成中...';
         aiBtn.disabled = true;
-        const result = await fetchAiExamples(en, zh, settings.apiKey);
+        const result = await fetchAiExamples(en, zh);
         if (!result || !result.length) {
           aiBtn.textContent = '⚠️ 生成失败，请重试';
           aiBtn.disabled = false;

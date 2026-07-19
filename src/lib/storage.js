@@ -8,7 +8,9 @@ const IFLL_STORAGE = (() => {
     level: 'cet4',
     knownWords: [],
     excludedSites: [],
-    apiKey: ''
+    apiKey: '',
+    apiEndpoint: 'https://api.deepseek.com',
+    apiModel: 'deepseek-chat'
   };
 
   async function get() {

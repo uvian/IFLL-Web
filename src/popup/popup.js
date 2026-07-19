@@ -9,6 +9,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const wordCount = document.getElementById('wordCount');
   const knownCount = document.getElementById('knownCount');
   const apiKey = document.getElementById('apiKey');
+  const apiEndpoint = document.getElementById('apiEndpoint');
+  const apiEndpointCustom = document.getElementById('apiEndpointCustom');
+  const apiEndpointCustomRow = document.getElementById('apiEndpointCustomRow');
+  const apiModel = document.getElementById('apiModel');
   const saveApi = document.getElementById('saveApi');
   const refreshBtn = document.getElementById('refreshPage');
   const excludedList = document.getElementById('excludedList');
@@ -22,6 +26,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   apiKey.value = settings.apiKey || '';
   wordCount.textContent = WORD_BANK.length;
   knownCount.textContent = (settings.knownWords || []).length;
+
+  /* Restore API endpoint */
+  const defaultEndpoints = ['https://api.deepseek.com', 'https://api.openai.com/v1', 'https://openrouter.ai/api/v1'];
+  if (defaultEndpoints.includes(settings.apiEndpoint)) {
+    apiEndpoint.value = settings.apiEndpoint;
+  } else {
+    apiEndpoint.value = '__custom__';
+    apiEndpointCustom.value = settings.apiEndpoint || '';
+    apiEndpointCustomRow.style.display = 'flex';
+  }
+  apiModel.value = settings.apiModel || 'deepseek-chat';
+
+  /* Toggle custom endpoint input */
+  apiEndpoint.addEventListener('change', () => {
+    const show = apiEndpoint.value === '__custom__';
+    apiEndpointCustomRow.style.display = show ? 'flex' : 'none';
+  });
 
   renderExcludedSites(settings.excludedSites || []);
   const excludedCountEl = document.getElementById('excludedCount');
@@ -69,7 +90,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   level.addEventListener('change', () => savePartial({ level: level.value }));
 
   saveApi.addEventListener('click', async () => {
-    await savePartial({ apiKey: apiKey.value.trim() });
+    const ep = apiEndpoint.value === '__custom__'
+      ? apiEndpointCustom.value.trim()
+      : apiEndpoint.value;
+    await savePartial({
+      apiKey: apiKey.value.trim(),
+      apiEndpoint: ep,
+      apiModel: apiModel.value.trim() || 'deepseek-chat'
+    });
     saveApi.textContent = '已保存';
     setTimeout(() => { saveApi.textContent = '保存'; }, 2000);
   });
