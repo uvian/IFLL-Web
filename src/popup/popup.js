@@ -57,6 +57,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  /* ── Voice settings ── */
+  const voiceSelect = document.getElementById('voiceSelect');
+  if (voiceSelect && 'speechSynthesis' in window) {
+    function populateVoices() {
+      const voices = window.speechSynthesis.getVoices();
+      const enVoices = voices.filter(v => v.lang.startsWith('en'));
+      const current = voiceSelect.value;
+      voiceSelect.innerHTML = '<option value="">默认 (浏览器自动选择)</option>';
+      const groups = {};
+      for (const v of enVoices) {
+        const label = `${v.name} (${v.lang})`;
+        const opt = document.createElement('option');
+        opt.value = v.name;
+        opt.textContent = `${v.name} — ${v.lang}`;
+        voiceSelect.appendChild(opt);
+      }
+      if (current) voiceSelect.value = current;
+    }
+    populateVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', populateVoices);
+    voiceSelect.value = settings.voiceName || '';
+    voiceSelect.addEventListener('change', () => savePartial({ voiceName: voiceSelect.value }));
+  }
+
   apiEndpoint.addEventListener('change', () => {
     const show = apiEndpoint.value === '__custom__';
     apiEndpointCustomRow.style.display = show ? 'flex' : 'none';

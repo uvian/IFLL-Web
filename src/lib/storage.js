@@ -11,6 +11,8 @@ const IFLL_STORAGE = (() => {
     apiKey: '',
     apiEndpoint: 'https://api.deepseek.com',
     apiModel: 'deepseek-chat',
+    voiceName: '',         // '' = browser default
+    voiceRate: 0.85,       // speech rate
     /* Review queue */
     reviewQueue: [],     // { zh, en, addedAt, reviewCount, nextReview }
     /* User-added words (web discovery) */

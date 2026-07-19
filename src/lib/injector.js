@@ -137,14 +137,22 @@ const IFLL_INJECTOR = (() => {
 
   /* Speak word using browser's speech synthesis */
   function speakWord(word) {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel(); // stop any ongoing speech
-      const utterance = new SpeechSynthesisUtterance(word);
-      utterance.lang = 'en-US';
-      utterance.rate = 0.85;
-      utterance.pitch = 1;
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(word);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.85;
+    utterance.pitch = 1;
+    /* Use configured voice if available */
+    (async () => {
+      const { voiceName } = await IFLL_STORAGE.get();
+      if (voiceName) {
+        const voices = window.speechSynthesis.getVoices();
+        const found = voices.find(v => v.name === voiceName);
+        if (found) utterance.voice = found;
+      }
       window.speechSynthesis.speak(utterance);
-    }
+    })();
   }
 
   function renderBoldHtml(text) {
