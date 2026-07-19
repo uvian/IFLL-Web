@@ -26,58 +26,112 @@ const IFLL_INJECTOR = (() => {
     return w[lvl] || 99;
   }
 
-  /* ---- Improved matching: prefers multi-char, skips function words ---- */
-  function findMatches(text, bankMap, knownSet, level) {
-    const matches = [];
-    for (const [zh, entry] of bankMap) {
-      if (knownSet.has(zh)) continue;
-      if (entry.level !== 'all' && getLevelWeight(entry.level) > getLevelWeight(level)) continue;
+  /* ---- Aho-Corasick Automaton (multi-pattern matching, O(n)) ---- */
+  class AhoCorasick {
+    constructor() { this.nodes = [{ children: {}, output: [], fail: 0 }]; }
 
-      /* Skip unwanted single-character words */
-      if (zh.length === 1 && SKIP_SINGLE.has(zh)) continue;
-
+    addWord(zh, entry) {
       let idx = 0;
-      while ((idx = text.indexOf(zh, idx)) !== -1) {
-        const end = idx + zh.length;
-
-        /* For single-char words: require word boundary (not embedded in longer CJK) */
-        if (zh.length === 1) {
-          const prev = idx > 0 ? text[idx - 1] : ' ';
-          const next = end < text.length ? text[end] : ' ';
-          const prevCJK = /[\u4e00-\u9fff]/.test(prev);
-          const nextCJK = /[\u4e00-\u9fff]/.test(next);
-          /* Skip if embedded between two CJK chars (likely part of a name or compound word) */
-          if (prevCJK && nextCJK) { idx = end; continue; }
+      for (const ch of zh) {
+        if (!this.nodes[idx].children[ch]) {
+          this.nodes[idx].children[ch] = this.nodes.length;
+          this.nodes.push({ children: {}, output: [], fail: 0 });
         }
+        idx = this.nodes[idx].children[ch];
+      }
+      this.nodes[idx].output.push(entry);
+    }
 
-        matches.push({
-          zh, en: entry.en, def: entry.def || entry.en,
-          pos: entry.pos || 'noun', posCn: entry.pos_cn || '名词',
-          examples: entry.examples || (entry.example ? [entry.example] : []),
-          examplesCn: entry.examplesCn || (entry.example_cn ? [entry.example_cn] : []),
-          ipa: entry.ipa || '',
-          level: entry.level, idx, end, len: zh.length
-        });
-        idx = end;
+    build() {
+      const q = [];
+      /* Level 1 children point fail to root */
+      for (const ch in this.nodes[0].children) {
+        const child = this.nodes[0].children[ch];
+        this.nodes[child].fail = 0;
+        q.push(child);
+      }
+      while (q.length) {
+        const r = q.shift();
+        for (const ch in this.nodes[r].children) {
+          const child = this.nodes[r].children[ch];
+          let f = this.nodes[r].fail;
+          while (f !== 0 && !this.nodes[f].children[ch]) f = this.nodes[f].fail;
+          this.nodes[child].fail = this.nodes[f].children[ch] || 0;
+          this.nodes[child].output = [...this.nodes[child].output, ...this.nodes[this.nodes[child].fail].output];
+          q.push(child);
+        }
       }
     }
 
-    /* Resolve overlaps: shorter words overlapped by a longer one are removed */
-    matches.sort((a, b) => a.idx - b.idx);
-    const filtered = [];
-    for (const m of matches) {
-      /* Skip if overlapped by a longer match already accepted */
-      if (filtered.some(accepted => accepted.idx <= m.idx && accepted.end >= m.end && accepted.len > m.len)) continue;
-      /* Remove any accepted matches that this longer match fully covers */
-      for (let i = filtered.length - 1; i >= 0; i--) {
-        if (m.idx <= filtered[i].idx && m.end >= filtered[i].end && m.len > filtered[i].len) {
-          filtered.splice(i, 1);
+    /* Return all matches in text, each with {zh, en, def, pos, posCn, examples, examplesCn, ipa, level, idx, end, len} */
+    search(text, knownSet, level, skipSet) {
+      const matches = [];
+      let nodeIdx = 0;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        while (nodeIdx !== 0 && !this.nodes[nodeIdx].children[ch]) nodeIdx = this.nodes[nodeIdx].fail;
+        if (this.nodes[nodeIdx].children[ch]) nodeIdx = this.nodes[nodeIdx].children[ch];
+        if (this.nodes[nodeIdx].output.length) {
+          for (const entry of this.nodes[nodeIdx].output) {
+            if (knownSet.has(entry.zh)) continue;
+            if (entry.level !== 'all' && getLevelWeight(entry.level) > getLevelWeight(level)) continue;
+            if (entry.zh.length === 1) {
+              if (skipSet.has(entry.zh)) continue;
+              /* Require word boundary for single-char */
+              const prev = i - entry.zh.length + 1 > 0 ? text[i - entry.zh.length] : ' ';
+              const next = i + 1 < text.length ? text[i + 1] : ' ';
+              if (/[\u4e00-\u9fff]/.test(prev) && /[\u4e00-\u9fff]/.test(next)) continue;
+            }
+            const idx = i - entry.zh.length + 1;
+            const end = i + 1;
+            if (matches.length && matches[matches.length - 1].zh.length > entry.zh.length &&
+                matches[matches.length - 1].idx <= idx && matches[matches.length - 1].end >= end) continue;
+            matches.push({
+              zh: entry.zh, en: entry.en, def: entry.def || entry.en,
+              pos: entry.pos || 'noun', posCn: entry.pos_cn || '名词',
+              examples: entry.examples || (entry.example ? [entry.example] : []),
+              examplesCn: entry.examplesCn || (entry.example_cn ? [entry.example_cn] : []),
+              ipa: entry.ipa || '', level: entry.level,
+              idx, end, len: entry.zh.length
+            });
+          }
         }
       }
-      filtered.push(m);
+      /* Deduplicate: prefer longer match at same start position */
+      const filtered = [];
+      matches.sort((a, b) => a.idx - b.idx || b.len - a.len);
+      for (const m of matches) {
+        if (filtered.length > 0) {
+          const last = filtered[filtered.length - 1];
+          if (last.idx <= m.idx && last.end >= m.end && last.len >= m.len) continue;
+          if (last.idx === m.idx) continue; /* same start, keep the first (longer, due to sort) */
+        }
+        filtered.push(m);
+      }
+      return filtered;
     }
-    filtered.sort((a, b) => a.idx - b.idx);
-    return filtered;
+  }
+
+  /* ---- Build automaton from bank map ---- */
+  let ahoCache = null;
+  function getAutomaton(settings) {
+    if (ahoCache) return ahoCache;
+    const ac = new AhoCorasick();
+    const bankMap = IFLL_STORAGE.buildFullBank(WORD_BANK, settings?.userWords || []);
+    for (const [zh, entry] of bankMap) {
+      ac.addWord(zh, entry);
+    }
+    ac.build();
+    ahoCache = ac;
+    return ac;
+  }
+  function invalidateAhoCache() { ahoCache = null; }
+
+  /* ---- Matching: delegates to Aho-Corasick ---- */
+  function findMatches(text, bankMap, knownSet, level) {
+    const ac = ahoCache || getAutomaton();
+    const matches = ac.search(text, knownSet, level, SKIP_SINGLE);
+    return matches;
   }
 
   /* ---- Selection: prefers multi-char, spread evenly ---- */
@@ -156,16 +210,16 @@ const IFLL_INJECTOR = (() => {
   /* ---- Main inject (with processed-node marking) ---- */
   async function inject(root, settings) {
     if (!settings?.enabled) return;
-    const { frequency, level, knownWords, excludedSites, userWords } = settings;
+    const { frequency, level, knownWords, excludedSites } = settings;
     const hostname = window.location.hostname;
     if (excludedSites && excludedSites.some(s => hostname.includes(s) || s.includes(hostname))) return;
     const knownSet = new Set(knownWords);
-    const bankMap = IFLL_STORAGE.buildFullBank(WORD_BANK, userWords || []);
+    /* Ensure Aho-Corasick automaton is built (cached) */
+    getAutomaton(settings);
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
     const textNodes = [];
     let node;
     while ((node = walker.nextNode())) {
-      /* Skip nodes we already processed */
       if (node.parentElement && node.parentElement.closest && node.parentElement.closest('.ifll-replaced')) continue;
       if (!/[\u4e00-\u9fff]/.test(node.textContent)) continue;
       if (shouldSkip(node) || shouldSkipAncestor(node)) continue;
@@ -174,7 +228,7 @@ const IFLL_INJECTOR = (() => {
     for (const tn of textNodes) {
       const text = tn.textContent;
       if (!/[\u4e00-\u9fff]/.test(text)) continue;
-      const matches = findMatches(text, bankMap, knownSet, level);
+      const matches = findMatches(text, null, knownSet, level);
       if (!matches.length) continue;
       const count = getReplaceCount(frequency, text.length);
       const selected = selectMatches(matches, count);
@@ -294,6 +348,7 @@ const IFLL_INJECTOR = (() => {
             examples: examples, examplesCn: examplesCn
           });
           btn.textContent = added ? '✓ 已添加' : '已存在'; btn.disabled = true;
+          if (added) invalidateAhoCache();
         } else if (btn.dataset.action === 'speak') {
           speakWord(tooltipEl.dataset.en);
         }
