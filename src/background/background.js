@@ -72,11 +72,34 @@ async function handleAiExamples(en, zh, apiKey, apiEndpoint, apiModel) {
     const data = await resp.json();
     const content = data.choices?.[0]?.message?.content;
     if (!content) return { error: 'empty response' };
-    let jsonStr = content;
-    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) jsonStr = jsonMatch[1];
-    const parsed = JSON.parse(jsonStr);
-    return { examples: parsed.examples || [] };
+
+    /* Robust JSON extraction: find first { ... } with "examples" */
+    function extractJson(text) {
+      /* Strip markdown code fences first */
+      text = text.replace(/```[\s\S]*?```/g, m => {
+        const inner = m.replace(/```(?:json)?\s*/, '').replace(/\s*```$/, '');
+        return inner;
+      });
+      /* Try parsing the whole thing */
+      try { return JSON.parse(text); } catch (_) {}
+      /* Find the first { } block that contains "examples" */
+      const start = text.indexOf('{');
+      if (start < 0) return null;
+      let depth = 0, end = -1;
+      for (let i = start; i < text.length; i++) {
+        if (text[i] === '{') depth++;
+        if (text[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+      }
+      if (end > start) {
+        try { return JSON.parse(text.slice(start, end)); } catch (_) {}
+      }
+      return null;
+    }
+
+    const parsed = extractJson(content);
+    if (!parsed) return { error: 'cannot parse AI response as JSON' };
+    if (!parsed.examples || !Array.isArray(parsed.examples)) return { error: 'response missing "examples" array' };
+    return { examples: parsed.examples };
   } catch (err) {
     return { error: err.message };
   }
