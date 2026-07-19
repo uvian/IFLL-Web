@@ -2,7 +2,6 @@
  * IFLL — Popup script
  */
 document.addEventListener('DOMContentLoaded', async () => {
-  /* Elements */
   const enabled = document.getElementById('enabled');
   const toggleLabel = document.getElementById('toggleLabel');
   const frequency = document.getElementById('frequency');
@@ -12,8 +11,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const apiKey = document.getElementById('apiKey');
   const saveApi = document.getElementById('saveApi');
   const refreshBtn = document.getElementById('refreshPage');
+  const excludedList = document.getElementById('excludedList');
+  const clearExcluded = document.getElementById('clearExcluded');
 
-  /* Load settings */
   const settings = await IFLL_STORAGE.get();
   enabled.checked = settings.enabled;
   toggleLabel.textContent = settings.enabled ? '已开启' : '已关闭';
@@ -23,14 +23,38 @@ document.addEventListener('DOMContentLoaded', async () => {
   wordCount.textContent = WORD_BANK.length;
   knownCount.textContent = (settings.knownWords || []).length;
 
-  /* Auto-save on change */
+  renderExcludedSites(settings.excludedSites || []);
+
   async function savePartial(partial) {
     await IFLL_STORAGE.set(partial);
-    /* Notify active tabs of settings change */
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     for (const tab of tabs) {
       chrome.tabs.sendMessage(tab.id, { type: 'IFLL_SETTINGS_CHANGED', settings: partial }).catch(() => {});
     }
+  }
+
+  function renderExcludedSites(sites) {
+    if (!excludedList) return;
+    if (!sites || !sites.length) {
+      excludedList.innerHTML = '<span class="p-empty">暂无排除的网站</span>';
+      return;
+    }
+    excludedList.innerHTML = sites.map(s =>
+      `<span class="p-excluded-item">
+        <span>${s}</span>
+        <button class="p-excluded-remove" data-site="${s}">✕</button>
+      </span>`
+    ).join('');
+
+    excludedList.querySelectorAll('.p-excluded-remove').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const site = btn.dataset.site;
+        const cur = await IFLL_STORAGE.get();
+        const sites = (cur.excludedSites || []).filter(s => s !== site);
+        await savePartial({ excludedSites: sites });
+        renderExcludedSites(sites);
+      });
+    });
   }
 
   enabled.addEventListener('change', async () => {
@@ -48,7 +72,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => { saveApi.textContent = '保存'; }, 2000);
   });
 
-  refreshBtn.addEventListener('click', () => {
-    chrome.tabs.reload();
-  });
+  refreshBtn.addEventListener('click', () => { chrome.tabs.reload(); });
+
+  if (clearExcluded) {
+    clearExcluded.addEventListener('click', async () => {
+      await savePartial({ excludedSites: [] });
+      renderExcludedSites([]);
+    });
+  }
 });

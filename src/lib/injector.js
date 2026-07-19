@@ -1,10 +1,25 @@
 /* IFLL — Word injector engine */
 const IFLL_INJECTOR = (() => {
+  /* Latin POS labels */
+  const POS_LABEL = {
+    verb: 'v.', noun: 'n.', adjective: 'adj.',
+    adverb: 'adv.', conjunction: 'conj.'
+  };
+
+  function posLabel(pos) {
+    return POS_LABEL[pos] || pos + '.';
+  }
+
   /* ---- Config helpers ---- */
   function getReplaceCount(frequency, textLen) {
     const ratios = { low: 0.005, medium: 0.015, high: 0.03 };
     const ratio = ratios[frequency] || ratios.medium;
     return Math.max(1, Math.min(5, Math.round(textLen * ratio)));
+  }
+
+  function getLevelWeight(lvl) {
+    const w = { all: 0, daily: 1, cet4: 2, cet6: 3, ielts: 4, graduate: 5 };
+    return w[lvl] || 99;
   }
 
   /* ---- Matching ---- */
@@ -13,13 +28,13 @@ const IFLL_INJECTOR = (() => {
     for (const [zh, entry] of bankMap) {
       if (knownSet.has(zh)) continue;
       if (entry.level !== 'all' && getLevelWeight(entry.level) > getLevelWeight(level)) continue;
-
       let idx = 0;
       while ((idx = text.indexOf(zh, idx)) !== -1) {
         matches.push({
           zh, en: entry.en, def: entry.def || entry.en,
-          pos: entry.pos || 'noun', pos_cn: entry.pos_cn || '名词',
-          example: entry.example || '', example_cn: entry.example_cn || '',
+          pos: entry.pos || 'noun', posCn: entry.pos_cn || '名词',
+          examples: entry.examples || (entry.example ? [entry.example] : []),
+          examplesCn: entry.examplesCn || (entry.example_cn ? [entry.example_cn] : []),
           level: entry.level, idx, end: idx + zh.length
         });
         idx += zh.length;
@@ -29,11 +44,6 @@ const IFLL_INJECTOR = (() => {
     return matches;
   }
 
-  function getLevelWeight(lvl) {
-    const w = { all: 0, daily: 1, cet4: 2, cet6: 3, ielts: 4, graduate: 5 };
-    return w[lvl] || 99;
-  }
-
   /* ---- Selection ---- */
   function selectMatches(matches, count) {
     if (matches.length <= count) return matches;
@@ -41,10 +51,7 @@ const IFLL_INJECTOR = (() => {
     let lastEnd = -1;
     for (const m of matches) {
       if (selected.length >= count) break;
-      if (m.idx >= lastEnd + 2) {
-        selected.push(m);
-        lastEnd = m.end;
-      }
+      if (m.idx >= lastEnd + 2) { selected.push(m); lastEnd = m.end; }
     }
     if (selected.length < count) {
       for (const m of matches) {
@@ -55,14 +62,12 @@ const IFLL_INJECTOR = (() => {
     return selected;
   }
 
-  /* ---- Text node replacement: Chinese word → English word on page ---- */
+  /* ---- Text node replacement: Chinese word → English word ---- */
   function replaceInTextNode(node, matches) {
     if (!matches.length || !node.parentNode) return;
-
     const sorted = [...matches].sort((a, b) => b.idx - a.idx);
     let text = node.textContent;
     const fragment = document.createDocumentFragment();
-
     let lastEnd = text.length;
     for (const m of sorted) {
       const after = text.slice(m.end, lastEnd);
@@ -72,100 +77,147 @@ const IFLL_INJECTOR = (() => {
       span.dataset.zh = m.zh;
       span.dataset.def = m.def;
       span.dataset.pos = m.pos;
-      span.dataset.posCn = m.pos_cn;
-      span.dataset.example = m.example || '';
-      span.dataset.exampleCn = m.example_cn || '';
-      // Replace with ENGLISH word on the page
+      span.dataset.posCn = m.posCn;
+      span.dataset.examples = JSON.stringify(m.examples);
+      span.dataset.examplesCn = JSON.stringify(m.examplesCn);
       span.textContent = m.en;
-
       const wrapper = document.createElement('span');
       wrapper.appendChild(span);
       if (after) wrapper.appendChild(document.createTextNode(after));
-
       lastEnd = m.idx;
       text = text.slice(0, m.idx);
       fragment.appendChild(wrapper);
     }
     if (lastEnd > 0) {
-      const before = document.createTextNode(text);
-      fragment.insertBefore(before, fragment.firstChild);
+      fragment.insertBefore(document.createTextNode(text), fragment.firstChild);
     }
-
     node.parentNode.replaceChild(fragment, node);
   }
 
   /* ---- Skip tags ---- */
   function shouldSkip(node) {
     if (!node.parentElement) return true;
-    const tag = node.parentElement.tagName;
-    return ['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT', 'SELECT', 'OPTION',
-      'IFRAME', 'SVG', 'CODE', 'PRE', 'CANVAS'].includes(tag);
+    return ['SCRIPT','STYLE','NOSCRIPT','TEXTAREA','INPUT','SELECT','OPTION',
+      'IFRAME','SVG','CODE','PRE','CANVAS'].includes(node.parentElement.tagName);
   }
 
   function shouldSkipAncestor(node) {
     let el = node.parentElement;
     while (el) {
       if (el.classList && el.classList.contains('ifll-word')) return true;
-      if (el.closest) {
-        if (el.closest('script, style, noscript, textarea, input, select, option, iframe, svg, code, pre, canvas, .ifll-word, [contenteditable="true"]')) return true;
-      }
+      if (el.closest && el.closest('script, style, noscript, textarea, input, select, option, iframe, svg, code, pre, canvas, .ifll-word, [contenteditable="true"]')) return true;
       el = el.parentElement;
     }
     return false;
   }
 
-  /* ---- Main inject function ---- */
+  /* ---- Main inject ---- */
   async function inject(root, settings) {
-    const { frequency, level, knownWords } = settings || await IFLL_STORAGE.get();
+    const { frequency, level, knownWords, excludedSites } = settings || await IFLL_STORAGE.get();
     if (!settings?.enabled) return;
+
+    /* Skip excluded sites */
+    const hostname = window.location.hostname;
+    if (excludedSites && excludedSites.some(s => hostname.includes(s) || s.includes(hostname))) return;
 
     const knownSet = new Set(knownWords);
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
     const textNodes = [];
-
     let node;
     while ((node = walker.nextNode())) {
       if (!/[\u4e00-\u9fff]/.test(node.textContent)) continue;
       if (shouldSkip(node) || shouldSkipAncestor(node)) continue;
       textNodes.push(node);
     }
-
     for (const tn of textNodes) {
       const text = tn.textContent;
       if (!/[\u4e00-\u9fff]/.test(text)) continue;
-
       const matches = findMatches(text, WORD_BANK_MAP, knownSet, level);
       if (!matches.length) continue;
-
       const count = getReplaceCount(frequency, text.length);
       const selected = selectMatches(matches, count);
       if (selected.length) replaceInTextNode(tn, selected);
     }
   }
 
-  /* ---- Tooltip system: new design ---- */
+  /* ---- Tooltip helpers ---- */
   let tooltipEl = null;
 
-  function htmlEncode(str) {
-    return (str || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+  function htmlEncode(s) {
+    return (s == null ? '' : String(s))
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
-  function showTooltip(e) {
+  function escapeRegex(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /* ---- AI example fetch ---- */
+  let aiLoading = false;
+
+  async function fetchAiExamples(en, zh, apiKey) {
+    if (!apiKey || aiLoading) return null;
+    aiLoading = true;
+    try {
+      /* Determine API endpoint from the key pattern */
+      const baseUrl = apiKey.startsWith('sk-') ? 'https://api.openai.com/v1' : 'https://api.deepseek.com';
+      const resp = await fetch(baseUrl + '/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [
+            { role: 'system', content: 'You are a language tutor. Generate 3 natural English example sentences for the given word. Return ONLY JSON: {"examples":[{"en":"sentence","cn":"translation with **word** bolded"}]}' },
+            { role: 'user', content: `Word: "${en}" (${zh})` }
+          ],
+          temperature: 0.7,
+          max_tokens: 500
+        })
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) return null;
+      const parsed = JSON.parse(content);
+      return parsed.examples || null;
+    } catch (_) {
+      return null;
+    } finally {
+      aiLoading = false;
+    }
+  }
+
+  /* ---- Show tooltip ---- */
+  async function showTooltip(e) {
     const span = e.target.closest('.ifll-word');
     if (!span) return;
 
     const rect = span.getBoundingClientRect();
     const en = span.dataset.en;
-    const zh = htmlEncode(span.dataset.zh);
+    const zh = span.dataset.zh;
     const def = htmlEncode(span.dataset.def || en);
-    const posCn = htmlEncode(span.dataset.posCn || '');
-    const example = htmlEncode(span.dataset.example || '');
-    const exampleCn = htmlEncode(span.dataset.exampleCn || '');
+    const pos = span.dataset.pos || 'noun';
+    const posCn = span.dataset.posCn || '名词';
+    const posLatin = posLabel(pos);
+
+    /* Parse examples from JSON dataset */
+    let examples = [];
+    let examplesCn = [];
+    try {
+      const raw = span.dataset.examples;
+      if (raw) examples = JSON.parse(raw);
+    } catch (_) {}
+    try {
+      const raw = span.dataset.examplesCn;
+      if (raw) examplesCn = JSON.parse(raw);
+    } catch (_) {}
+
+    /* Fallback for old single-string example format */
+    if (!examples.length && span.dataset.example) {
+      examples = [span.dataset.example];
+      examplesCn = [span.dataset.exampleCn || ''];
+    }
 
     if (!tooltipEl) {
       tooltipEl = document.createElement('div');
@@ -185,54 +237,115 @@ const IFLL_INJECTOR = (() => {
           await IFLL_STORAGE.markUnknown(zhWord);
           btn.textContent = '✗ 已移除';
           btn.disabled = true;
+        } else if (btn.dataset.action === 'exclude-site') {
+          const hostname = window.location.hostname;
+          const settings = await IFLL_STORAGE.get();
+          const excludedSites = settings.excludedSites || [];
+          if (!excludedSites.includes(hostname)) {
+            excludedSites.push(hostname);
+            await IFLL_STORAGE.set({ excludedSites });
+          }
+          btn.textContent = '✓ 已排除';
+          btn.disabled = true;
+          IFLL_INJECTOR.destroy();
         }
       });
     }
 
-    tooltipEl.dataset.zh = span.dataset.zh;
+    tooltipEl.dataset.zh = zh;
 
     /* Build tooltip HTML */
     let html = `
       <div class="ifll-tt-en">${htmlEncode(en)}</div>
-      <div class="ifll-tt-meta">${zh} · ${posCn}</div>
+      <div class="ifll-tt-meta">${htmlEncode(zh)} · <span class="ifll-tt-pos">${posLatin}</span> ${htmlEncode(posCn)}</div>
       <div class="ifll-tt-divider"></div>
       <div class="ifll-tt-label">Definition</div>
       <div class="ifll-tt-def">${def}</div>
     `;
 
-    /* Add example section if data available */
-    if (example) {
-      html += `
-        <div class="ifll-tt-divider"></div>
-        <div class="ifll-tt-label">Example</div>
-        <div class="ifll-tt-example">"${example}"</div>
-        <div class="ifll-tt-trans">${exampleCn}</div>
-      `;
+    /* Built-in examples (up to 3) */
+    if (examples.length) {
+      html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">Examples</div>`;
+      const maxShow = Math.min(3, examples.length);
+      for (let i = 0; i < maxShow; i++) {
+        const ex = htmlEncode(examples[i]);
+        const tcn = examplesCn[i] || '';
+        html += `<div class="ifll-tt-example">"${ex}"</div>`;
+        if (tcn) {
+          html += `<div class="ifll-tt-trans">${htmlEncode(tcn)}</div>`;
+        }
+      }
     }
 
+    /* AI examples placeholder (will be filled asynchronously) */
+    html += `<div class="ifll-tt-divider"></div>`;
+    html += `<div class="ifll-tt-ai" id="ifll-ai-area">
+      <button data-action="ai-examples" class="ifll-btn-ai" id="ifll-ai-btn">AI 生成更多例句</button>
+    </div>`;
+
+    html += `<div class="ifll-tt-divider"></div>`;
     html += `
       <div class="ifll-tt-actions">
         <button data-action="known" class="ifll-btn-known">✓ 认识</button>
         <button data-action="unknown" class="ifll-btn-unknown">✗ 不认识</button>
+        <button data-action="exclude-site" class="ifll-btn-exclude">⛔ 排除此站</button>
       </div>
     `;
 
     tooltipEl.innerHTML = html;
 
-    /* Bold the Chinese word in example translation */
-    if (example) {
-      const transDiv = tooltipEl.querySelector('.ifll-tt-trans');
-      if (transDiv) {
-        const word = span.dataset.zh;
-        const regex = new RegExp(htmlEncode(word).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-        transDiv.innerHTML = transDiv.textContent.replace(regex, `<strong class="ifll-tt-bold">${htmlEncode(word)}</strong>`);
-      }
+    /* Bold the target word in each example translation */
+    const transDivs = tooltipEl.querySelectorAll('.ifll-tt-trans');
+    const word = span.dataset.zh;
+    const wordRegex = new RegExp(escapeRegex(word), 'g');
+    transDivs.forEach(div => {
+      const txt = div.textContent;
+      div.innerHTML = txt.replace(wordRegex, `<strong class="ifll-tt-bold">${htmlEncode(word)}</strong>`);
+    });
+
+    /* ---- AI button handler ---- */
+    const aiBtn = document.getElementById('ifll-ai-btn');
+    if (aiBtn) {
+      aiBtn.addEventListener('click', async () => {
+        const settings = await IFLL_STORAGE.get();
+        if (!settings.apiKey) {
+          aiBtn.textContent = '⚠️ 请在扩展设置中填入 API Key';
+          return;
+        }
+        aiBtn.textContent = '⏳ 生成中...';
+        aiBtn.disabled = true;
+        const result = await fetchAiExamples(en, zh, settings.apiKey);
+        if (!result || !result.length) {
+          aiBtn.textContent = '⚠️ 生成失败，请重试';
+          aiBtn.disabled = false;
+          return;
+        }
+        /* Replace AI area with results */
+        const aiArea = document.getElementById('ifll-ai-area');
+        if (aiArea) {
+          let aiHtml = `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">AI Examples</div>`;
+          for (const r of result) {
+            const ex = htmlEncode(r.en || '');
+            const tcn = htmlEncode(r.cn || '');
+            aiHtml += `<div class="ifll-tt-example ifll-tt-ai-example">"${ex}"</div>`;
+            if (tcn) {
+              aiHtml += `<div class="ifll-tt-trans">${tcn}</div>`;
+            }
+          }
+          aiArea.innerHTML = aiHtml;
+          /* Bold target words in AI translations */
+          tooltipEl.querySelectorAll('.ifll-tt-ai-example ~ .ifll-tt-trans').forEach(div => {
+            const txt = div.textContent;
+            div.innerHTML = txt.replace(wordRegex, `<strong class="ifll-tt-bold">${htmlEncode(word)}</strong>`);
+          });
+        }
+      });
     }
 
-    /* Position the tooltip */
+    /* Position */
     const x = rect.left + window.scrollX;
     const y = rect.bottom + window.scrollY + 4;
-    tooltipEl.style.left = Math.min(x, window.innerWidth - 360) + 'px';
+    tooltipEl.style.left = Math.min(x, window.innerWidth - 380) + 'px';
     tooltipEl.style.top = y + 'px';
     tooltipEl.style.display = 'block';
   }
@@ -247,18 +360,13 @@ const IFLL_INJECTOR = (() => {
     document.addEventListener('click', showTooltip);
     document.addEventListener('mouseover', (e) => {
       const word = e.target.closest('.ifll-word');
-      if (word) {
-        word.title = `${word.dataset.en} = ${word.dataset.zh} [click for details]`;
-      }
+      if (word) word.title = `${word.dataset.en} = ${word.dataset.zh} [click for details]`;
     });
     document.addEventListener('click', hideTooltip, true);
   }
 
   function removeTooltip() {
-    if (tooltipEl && tooltipEl.parentNode) {
-      tooltipEl.parentNode.removeChild(tooltipEl);
-      tooltipEl = null;
-    }
+    if (tooltipEl && tooltipEl.parentNode) { tooltipEl.parentNode.removeChild(tooltipEl); tooltipEl = null; }
   }
 
   /* ---- MutationObserver ---- */
@@ -266,41 +374,25 @@ const IFLL_INJECTOR = (() => {
 
   function startObserver(settings) {
     if (observer) observer.disconnect();
-
     let timer = null;
     observer = new MutationObserver(() => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(async () => {
         try {
           const fresh = await IFLL_STORAGE.get();
-          if (fresh.enabled) {
-            await inject(document.body, fresh);
-          }
-        } catch (err) {
-          console.warn('[IFLL] inject error:', err);
-        }
+          if (fresh.enabled) await inject(document.body, fresh);
+        } catch (err) { console.warn('[IFLL] inject error:', err); }
       }, 800);
     });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: false
-    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: false });
   }
 
-  function stopObserver() {
-    if (observer) {
-      observer.disconnect();
-      observer = null;
-    }
-  }
+  function stopObserver() { if (observer) { observer.disconnect(); observer = null; } }
 
   /* ---- Public API ---- */
   async function init() {
     const settings = await IFLL_STORAGE.get();
     if (!settings.enabled) return;
-
     await inject(document.body, settings);
     setupTooltipListeners();
     startObserver(settings);

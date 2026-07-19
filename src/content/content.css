@@ -2,38 +2,32 @@
  * IFLL — Injected styles for English-inline words + tooltip
  */
 :root {
-  --ifll-word-color: #2563eb;
-  --ifll-word-bg: #eff6ff;
-  --ifll-word-underline: #93c5fd;
-  --ifll-known-color: #6b7280;
-  --ifll-known-bg: #f3f4f6;
   --ifll-tooltip-bg: #1f2937;
   --ifll-tooltip-text: #f3f4f6;
   --ifll-tooltip-muted: #9ca3af;
   --ifll-tooltip-border: #374151;
   --ifll-accent: #60a5fa;
-  --ifll-green: #34d399;
 }
 
-/* ── Inline English word ── */
+/* ── Inline English word: no bg/color, just a subtle dotted underline ── */
 .ifll-word {
-  color: var(--ifll-word-color);
-  background: var(--ifll-word-bg);
-  border-bottom: 2px dotted var(--ifll-word-underline);
   cursor: pointer;
-  padding: 0 2px;
-  border-radius: 3px;
-  transition: background 0.15s, color 0.15s;
-  font-weight: 500;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  padding: 0 1px;
+  border-bottom: 2px dotted rgba(128, 128, 128, 0.5);
+  transition: border-color 0.15s;
+  /* Inherit the surrounding text color exactly */
+  color: inherit;
+  background: transparent;
+  font-family: inherit;
+  font-weight: inherit;
+  font-size: inherit;
+  line-height: inherit;
 }
 .ifll-word:hover {
-  background: #dbeafe;
+  border-bottom-color: rgba(59, 130, 246, 0.8);
 }
 .ifll-word.ifll-known {
-  color: var(--ifll-known-color);
-  background: var(--ifll-known-bg);
-  border-bottom-color: #d1d5db;
+  border-bottom-color: rgba(128, 128, 128, 0.2);
 }
 
 /* ── Tooltip container ── */
@@ -46,15 +40,14 @@
   border: 1px solid var(--ifll-tooltip-border);
   border-radius: 12px;
   padding: 16px 20px;
-  min-width: 280px;
-  max-width: 380px;
+  min-width: 300px;
+  max-width: 400px;
   box-shadow: 0 12px 36px rgba(0,0,0,0.3);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   font-size: 14px;
   line-height: 1.6;
 }
 
-/* ── English word (big, prominent) ── */
 .ifll-tt-en {
   font-size: 22px;
   font-weight: 800;
@@ -62,22 +55,20 @@
   margin-bottom: 2px;
   letter-spacing: -0.3px;
 }
-
-/* ── Chinese + part of speech ── */
 .ifll-tt-meta {
   font-size: 14px;
   color: var(--ifll-tooltip-muted);
   margin-bottom: 6px;
 }
-
-/* ── Dividers ── */
+.ifll-tt-pos {
+  color: var(--ifll-accent);
+  font-weight: 600;
+}
 .ifll-tt-divider {
   height: 1px;
   background: var(--ifll-tooltip-border);
   margin: 8px 0;
 }
-
-/* ── Section labels ── */
 .ifll-tt-label {
   font-size: 11px;
   font-weight: 700;
@@ -86,15 +77,11 @@
   color: var(--ifll-tooltip-muted);
   margin-bottom: 2px;
 }
-
-/* ── Definition ── */
 .ifll-tt-def {
   font-size: 13.5px;
   color: var(--ifll-tooltip-text);
   line-height: 1.5;
 }
-
-/* ── Example sentence ── */
 .ifll-tt-example {
   font-size: 13.5px;
   font-style: italic;
@@ -103,52 +90,75 @@
   padding-left: 4px;
   border-left: 2px solid var(--ifll-accent);
   margin-bottom: 4px;
+  margin-top: 2px;
 }
-
-/* ── Example translation ── */
 .ifll-tt-trans {
   font-size: 13px;
   color: var(--ifll-tooltip-muted);
   line-height: 1.5;
+  margin-bottom: 6px;
 }
 .ifll-tt-bold {
   color: var(--ifll-accent);
   font-weight: 700;
 }
 
-/* ── Action buttons ── */
+/* AI section */
+.ifll-tt-ai {
+  margin: 4px 0;
+}
+.ifll-btn-ai {
+  width: 100%;
+  padding: 6px 12px;
+  border: 1px dashed var(--ifll-tooltip-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ifll-accent);
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.ifll-btn-ai:hover:not(:disabled) {
+  background: rgba(96, 165, 250, 0.1);
+}
+.ifll-btn-ai:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Action buttons */
 .ifll-tt-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--ifll-tooltip-border);
+  gap: 6px;
+  margin-top: 8px;
 }
 .ifll-tt-actions button {
   flex: 1;
-  padding: 7px 12px;
+  padding: 6px 8px;
   border: none;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s, background 0.15s;
 }
 .ifll-tt-actions button:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: default;
 }
 .ifll-btn-known {
   background: #065f46;
   color: #a7f3d0;
 }
-.ifll-btn-known:hover:not(:disabled) {
-  background: #047857;
-}
+.ifll-btn-known:hover:not(:disabled) { background: #047857; }
 .ifll-btn-unknown {
   background: #374151;
   color: #e5e7eb;
 }
-.ifll-btn-unknown:hover:not(:disabled) {
-  background: #4b5563;
+.ifll-btn-unknown:hover:not(:disabled) { background: #4b5563; }
+.ifll-btn-exclude {
+  background: #451a03;
+  color: #fdba74;
+  flex: 0.7 !important;
 }
+.ifll-btn-exclude:hover:not(:disabled) { background: #78350f; }

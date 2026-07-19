@@ -1,4 +1,4 @@
-<!-- IFLL popup settings — clean, minimal -->
+<!-- IFLL popup settings -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -10,13 +10,12 @@
 <body>
   <div class="p-container">
 
-    <!-- Header -->
     <div class="p-header">
       <h1 class="p-logo">IFLL</h1>
       <span class="p-subtitle">English Injector</span>
     </div>
 
-    <!-- Main toggle -->
+    <!-- Toggle -->
     <label class="p-toggle">
       <input type="checkbox" id="enabled">
       <span class="p-toggle-track">
@@ -35,7 +34,6 @@
           <option value="high">高 (密集)</option>
         </select>
       </div>
-
       <div class="p-row">
         <label class="p-label" for="level">词汇等级</label>
         <select id="level" class="p-select">
@@ -53,17 +51,28 @@
       <span>已掌握: <strong id="knownCount">0</strong> 词</span>
     </div>
 
-    <!-- API key (future) -->
+    <!-- Excluded Sites -->
+    <details class="p-api" open>
+      <summary>排除的网站 (<span id="excludedCount">0</span>)</summary>
+      <div id="excludedList" class="p-excluded-list">
+        <span class="p-empty">暂无排除的网站</span>
+      </div>
+      <div class="p-row p-row-end">
+        <button id="clearExcluded" class="p-btn p-btn-sm p-btn-danger">清除全部</button>
+      </div>
+    </details>
+
+    <!-- API key -->
     <details class="p-api">
-      <summary>AI 释义 (可选)</summary>
-      <p class="p-api-hint">输入 OpenAI 兼容 API 密钥可获取 AI 生成的词义和例句</p>
-      <input type="text" id="apiKey" class="p-input" placeholder="sk-... or leave empty">
+      <summary>AI 增强 (可选)</summary>
+      <p class="p-api-hint">填入 OpenAI 兼容的 API Key 后，点击替换词可让 AI 生成更多例句</p>
+      <input type="text" id="apiKey" class="p-input" placeholder="sk-... 或 ds-...">
       <div class="p-row p-row-end">
         <button id="saveApi" class="p-btn p-btn-sm">保存</button>
       </div>
     </details>
 
-    <!-- Footer actions -->
+    <!-- Footer -->
     <div class="p-footer">
       <button id="refreshPage" class="p-btn p-btn-outline">刷新当前页</button>
     </div>

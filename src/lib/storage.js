@@ -1,11 +1,14 @@
-/* IFLL — Settings storage wrapper */
+/*
+ * IFLL — Settings storage wrapper
+ */
 const IFLL_STORAGE = (() => {
   const DEFAULTS = {
     enabled: true,
-    frequency: 'medium',   // low | medium | high
-    level: 'cet4',         // cet4 | cet6 | ielts | graduate
-    knownWords: [],        // array of Chinese strings user marked "known"
-    apiKey: ''             // optional OpenAI-compatible API key
+    frequency: 'medium',
+    level: 'cet4',
+    knownWords: [],
+    excludedSites: [],
+    apiKey: ''
   };
 
   async function get() {
@@ -17,13 +20,9 @@ const IFLL_STORAGE = (() => {
     await chrome.storage.sync.set(partial);
   }
 
-  /* Mark a word as known → it won't be replaced again */
   async function markKnown(zh) {
     const { knownWords } = await get();
-    if (!knownWords.includes(zh)) {
-      knownWords.push(zh);
-      await set({ knownWords });
-    }
+    if (!knownWords.includes(zh)) { knownWords.push(zh); await set({ knownWords }); }
   }
 
   async function markUnknown(zh) {
