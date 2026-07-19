@@ -353,11 +353,13 @@ const IFLL_INJECTOR = (() => {
 
   /* ---- Public API ---- */
   async function init() {
-    const s = await IFLL_STORAGE.get();
-    if (!s.enabled) return;
-    await inject(document.body, s);
-    setupTooltipListeners();
-    startObserver(s);
+    try {
+      const s = await IFLL_STORAGE.get();
+      if (!s.enabled) return;
+      await inject(document.body, s);
+      setupTooltipListeners();
+      startObserver(s);
+    } catch (err) { console.warn('[IFLL] init error:', err); }
   }
   function destroy() {
     stopObserver(); removeTooltip();
