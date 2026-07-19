@@ -169,10 +169,10 @@ const IFLL_INJECTOR = (() => {
     return result;
   }
 
-  /* ---- AI example fetch — routes through background worker (handles auth/networking) ---- */
+  /* ---- AI example fetch — routes through background worker ---- */
   async function fetchAiExamples(en, zh) {
     const settings = await IFLL_STORAGE.get();
-    if (!settings.apiKey) return null;
+    if (!settings.apiKey) return { error: 'no api key' };
     try {
       const result = await chrome.runtime.sendMessage({
         type: 'IFLL_AI_EXAMPLES',
@@ -181,10 +181,11 @@ const IFLL_INJECTOR = (() => {
         apiEndpoint: settings.apiEndpoint,
         apiModel: settings.apiModel
       });
-      if (!result || result.error) return null;
-      return result.examples || null;
-    } catch (_) {
-      return null;
+      if (!result) return { error: 'no response from background' };
+      if (result.error) return { error: result.error };
+      return { success: true, examples: result.examples || [] };
+    } catch (err) {
+      return { error: err.message };
     }
   }
 
@@ -306,8 +307,13 @@ const IFLL_INJECTOR = (() => {
         aiBtn.textContent = '⏳ 生成中...';
         aiBtn.disabled = true;
         const result = await fetchAiExamples(en, zh);
-        if (!result || !result.length) {
-          aiBtn.textContent = '⚠️ 生成失败，请重试';
+        if (!result.success) {
+          aiBtn.textContent = '⚠️ ' + (result.error || '生成失败');
+          aiBtn.disabled = false;
+          return;
+        }
+        if (!result.examples || !result.examples.length) {
+          aiBtn.textContent = '⚠️ AI 返回为空';
           aiBtn.disabled = false;
           return;
         }

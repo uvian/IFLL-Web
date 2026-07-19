@@ -84,6 +84,29 @@ body {
   font-weight: 500;
   font-size: 14px;
 }
+.p-row-grow {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+  align-items: center;
+}
+.p-row-grow select { flex: 1; }
+.p-btn-icon {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+.p-btn-icon:hover { background: #e5e7eb; color: #374151; }
 .p-select {
   padding: 6px 10px;
   border: 1px solid #d1d5db;
