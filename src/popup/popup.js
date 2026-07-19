@@ -28,6 +28,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   apiKey.value = settings.apiKey || '';
   wordCount.textContent = WORD_BANK.length;
   knownCount.textContent = (settings.knownWords || []).length;
+  const reviewCountEl = document.getElementById('reviewCount');
+  if (reviewCountEl) {
+    const due = (settings.reviewQueue || []).filter(w => w.nextReview <= Date.now()).length;
+    reviewCountEl.textContent = due;
+  }
 
   /* Restore API endpoint + model */
   const defaultEndpoints = ['https://api.deepseek.com', 'https://opencode.ai/zen/go/v1', 'https://api.openai.com/v1', 'https://openrouter.ai/api/v1'];
