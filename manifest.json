@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "IFLL - English Injector",
+  "version": "0.1.0",
+  "description": "Inject English words into Chinese pages for immersive language learning — swap & learn while you browse.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "IFLL",
+    "default_icon": {
+      "16": "icons/icon.svg",
+      "48": "icons/icon.svg",
+      "128": "icons/icon.svg"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": [
+        "src/lib/wordbank.js",
+        "src/lib/injector.js",
+        "src/content/content.js"
+      ],
+      "css": ["src/content/content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "src/background/background.js",
+    "type": "module"
+  },
+  "icons": {
+    "16": "icons/icon.svg",
+    "48": "icons/icon.svg",
+    "128": "icons/icon.svg"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "ifll@wto.li",
+      "strict_min_version": "109.0"
+    }
+  }
+}

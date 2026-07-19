@@ -1,0 +1,74 @@
+<!-- IFLL popup settings — clean, minimal -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IFLL</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="p-container">
+
+    <!-- Header -->
+    <div class="p-header">
+      <h1 class="p-logo">IFLL</h1>
+      <span class="p-subtitle">English Injector</span>
+    </div>
+
+    <!-- Main toggle -->
+    <label class="p-toggle">
+      <input type="checkbox" id="enabled">
+      <span class="p-toggle-track">
+        <span class="p-toggle-knob"></span>
+      </span>
+      <span class="p-toggle-label" id="toggleLabel">已开启</span>
+    </label>
+
+    <!-- Settings -->
+    <div class="p-section">
+      <div class="p-row">
+        <label class="p-label" for="frequency">替换频率</label>
+        <select id="frequency" class="p-select">
+          <option value="low">低 (偶尔)</option>
+          <option value="medium" selected>中 (适中)</option>
+          <option value="high">高 (密集)</option>
+        </select>
+      </div>
+
+      <div class="p-row">
+        <label class="p-label" for="level">词汇等级</label>
+        <select id="level" class="p-select">
+          <option value="cet4" selected>CET-4 四级</option>
+          <option value="cet6">CET-6 六级</option>
+          <option value="ielts">IELTS 雅思</option>
+          <option value="graduate">考研</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="p-section p-stats">
+      <span>内置词库: <strong id="wordCount">0</strong> 词</span>
+      <span>已掌握: <strong id="knownCount">0</strong> 词</span>
+    </div>
+
+    <!-- API key (future) -->
+    <details class="p-api">
+      <summary>AI 释义 (可选)</summary>
+      <p class="p-api-hint">输入 OpenAI 兼容 API 密钥可获取 AI 生成的词义和例句</p>
+      <input type="text" id="apiKey" class="p-input" placeholder="sk-... or leave empty">
+      <div class="p-row p-row-end">
+        <button id="saveApi" class="p-btn p-btn-sm">保存</button>
+      </div>
+    </details>
+
+    <!-- Footer actions -->
+    <div class="p-footer">
+      <button id="refreshPage" class="p-btn p-btn-outline">刷新当前页</button>
+    </div>
+
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
