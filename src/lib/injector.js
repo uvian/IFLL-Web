@@ -3,49 +3,100 @@ const IFLL_INJECTOR = (() => {
   const POS_LABEL = { verb: 'v.', noun: 'n.', adjective: 'adj.', adverb: 'adv.', conjunction: 'conj.' };
   function posLabel(pos) { return POS_LABEL[pos] || pos + '.'; }
 
+  /* Single-char words that should NEVER be replaced (function words, grammar particles, numbers, pronouns) */
+  const SKIP_SINGLE = new Set([
+    '的','了','是','在','和','就','都','而','及','等','与','或','被','把',
+    '对','从','向','到','让','上','下','中','也','不','这','那','人','我','他','她','们',
+    '一','二','三','四','五','六','七','八','九','十','百','千','万','亿',
+    '个','只','条','种','些','点','几','何','吗','呢','吧','啊','哦','嗯',
+    '又','再','还','已','曾','刚','才','正','在','将','要','会','能','可',
+    '以','为','之','其','所','者','被','于','与','因','但','若','虽','然'
+  ]);
+
   /* ---- Config ---- */
   function getReplaceCount(frequency, textLen) {
-    const ratios = { low: 0.005, medium: 0.015, high: 0.03 };
-    return Math.max(1, Math.min(5, Math.round(textLen * (ratios[frequency] || ratios.medium))));
+    /* Much lower ratios: 1-3 replacements per paragraph max */
+    const ratios = { low: 0.001, medium: 0.003, high: 0.008 };
+    const raw = Math.round(textLen * (ratios[frequency] || ratios.medium));
+    return Math.max(frequency === 'high' ? 2 : 1, Math.min(3, raw));
   }
+
   function getLevelWeight(lvl) {
     const w = { all: 0, daily: 1, cet4: 2, cet6: 3, ielts: 4, graduate: 5 };
     return w[lvl] || 99;
   }
 
-  /* ---- Smart matching ---- */
+  /* ---- Improved matching: prefers multi-char, skips function words ---- */
   function findMatches(text, bankMap, knownSet, level) {
     const matches = [];
     for (const [zh, entry] of bankMap) {
       if (knownSet.has(zh)) continue;
       if (entry.level !== 'all' && getLevelWeight(entry.level) > getLevelWeight(level)) continue;
+
+      /* Skip unwanted single-character words */
+      if (zh.length === 1 && SKIP_SINGLE.has(zh)) continue;
+
       let idx = 0;
       while ((idx = text.indexOf(zh, idx)) !== -1) {
+        const end = idx + zh.length;
+
+        /* For single-char words: require word boundary (not embedded in longer CJK) */
+        if (zh.length === 1) {
+          const prev = idx > 0 ? text[idx - 1] : ' ';
+          const next = end < text.length ? text[end] : ' ';
+          const prevCJK = /[\u4e00-\u9fff]/.test(prev);
+          const nextCJK = /[\u4e00-\u9fff]/.test(next);
+          /* Skip if embedded between two CJK chars (likely part of a name or compound word) */
+          if (prevCJK && nextCJK) { idx = end; continue; }
+        }
+
         matches.push({
           zh, en: entry.en, def: entry.def || entry.en,
           pos: entry.pos || 'noun', posCn: entry.pos_cn || '名词',
           examples: entry.examples || (entry.example ? [entry.example] : []),
           examplesCn: entry.examplesCn || (entry.example_cn ? [entry.example_cn] : []),
           ipa: entry.ipa || '',
-          level: entry.level, idx, end: idx + zh.length
+          level: entry.level, idx, end, len: zh.length
         });
-        idx += zh.length;
+        idx = end;
       }
     }
+
+    /* Resolve overlaps: shorter words overlapped by a longer one are removed */
     matches.sort((a, b) => a.idx - b.idx);
-    return matches;
+    const filtered = [];
+    for (const m of matches) {
+      /* Skip if overlapped by a longer match already accepted */
+      if (filtered.some(accepted => accepted.idx <= m.idx && accepted.end >= m.end && accepted.len > m.len)) continue;
+      /* Remove any accepted matches that this longer match fully covers */
+      for (let i = filtered.length - 1; i >= 0; i--) {
+        if (m.idx <= filtered[i].idx && m.end >= filtered[i].end && m.len > filtered[i].len) {
+          filtered.splice(i, 1);
+        }
+      }
+      filtered.push(m);
+    }
+    filtered.sort((a, b) => a.idx - b.idx);
+    return filtered;
   }
 
+  /* ---- Selection: prefers multi-char, spread evenly ---- */
   function selectMatches(matches, count) {
     if (matches.length <= count) return matches;
+    /* Prioritize multi-character matches */
+    const multi = matches.filter(m => m.len >= 2);
+    const single = matches.filter(m => m.len < 2);
+    const ordered = [...multi, ...single];
     const selected = [];
     let lastEnd = -1;
-    for (const m of matches) {
+    for (const m of ordered) {
       if (selected.length >= count) break;
-      if (m.idx >= lastEnd + 2) { selected.push(m); lastEnd = m.end; }
+      /* Space replacements at least 5 chars apart to avoid dense clusters */
+      if (m.idx >= lastEnd + 5) { selected.push(m); lastEnd = m.end; }
     }
+    /* If still under count, fill with remaining matches regardless of spacing */
     if (selected.length < count) {
-      for (const m of matches) {
+      for (const m of ordered) {
         if (selected.length >= count) break;
         if (!selected.includes(m)) selected.push(m);
       }
@@ -74,6 +125,7 @@ const IFLL_INJECTOR = (() => {
       span.dataset.ipa = m.ipa || '';
       span.textContent = m.en;
       const wrapper = document.createElement('span');
+      wrapper.className = 'ifll-replaced';
       wrapper.appendChild(span);
       if (after) wrapper.appendChild(document.createTextNode(after));
       lastEnd = m.idx;
@@ -84,7 +136,7 @@ const IFLL_INJECTOR = (() => {
     node.parentNode.replaceChild(fragment, node);
   }
 
-  /* ---- Skip ---- */
+  /* ---- Skip tags ---- */
   function shouldSkip(node) {
     if (!node.parentElement) return true;
     return ['SCRIPT','STYLE','NOSCRIPT','TEXTAREA','INPUT','SELECT','OPTION',
@@ -94,16 +146,17 @@ const IFLL_INJECTOR = (() => {
     let el = node.parentElement;
     while (el) {
       if (el.classList && el.classList.contains('ifll-word')) return true;
-      if (el.closest && el.closest('script,style,noscript,textarea,input,select,option,iframe,svg,code,pre,canvas,.ifll-word,.ifll-tooltip,[contenteditable]')) return true;
+      if (el.classList && el.classList.contains('ifll-replaced')) return true;
+      if (el.closest && el.closest('script,style,noscript,textarea,input,select,option,iframe,svg,code,pre,canvas,.ifll-word,.ifll-replaced,.ifll-tooltip,[contenteditable]')) return true;
       el = el.parentElement;
     }
     return false;
   }
 
-  /* ---- Main inject ---- */
+  /* ---- Main inject (with processed-node marking) ---- */
   async function inject(root, settings) {
-    const { frequency, level, knownWords, excludedSites, userWords } = settings || await IFLL_STORAGE.get();
     if (!settings?.enabled) return;
+    const { frequency, level, knownWords, excludedSites, userWords } = settings;
     const hostname = window.location.hostname;
     if (excludedSites && excludedSites.some(s => hostname.includes(s) || s.includes(hostname))) return;
     const knownSet = new Set(knownWords);
@@ -112,6 +165,8 @@ const IFLL_INJECTOR = (() => {
     const textNodes = [];
     let node;
     while ((node = walker.nextNode())) {
+      /* Skip nodes we already processed */
+      if (node.parentElement && node.parentElement.closest && node.parentElement.closest('.ifll-replaced')) continue;
       if (!/[\u4e00-\u9fff]/.test(node.textContent)) continue;
       if (shouldSkip(node) || shouldSkipAncestor(node)) continue;
       textNodes.push(node);
@@ -143,7 +198,6 @@ const IFLL_INJECTOR = (() => {
     utterance.lang = 'en-US';
     utterance.rate = 0.85;
     utterance.pitch = 1;
-    /* Use configured voice if available */
     (async () => {
       const { voiceName } = await IFLL_STORAGE.get();
       if (voiceName) {
@@ -249,7 +303,6 @@ const IFLL_INJECTOR = (() => {
     tooltipEl.dataset.zh = zh;
     tooltipEl.dataset.en = en;
 
-    /* Build HTML */
     let html = `
       <div class="ifll-tt-header">
         <div class="ifll-tt-en">
@@ -262,7 +315,6 @@ const IFLL_INJECTOR = (() => {
       <div class="ifll-tt-divider"></div>
       <div class="ifll-tt-def">${def}</div>`;
 
-    /* Built-in examples */
     if (examples.length) {
       html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">📖 例句</div>`;
       const maxShow = Math.min(3, examples.length);
@@ -272,15 +324,12 @@ const IFLL_INJECTOR = (() => {
       }
     }
 
-    /* AI Deep Analysis section */
     html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">🔍 AI 深度解析</div>`;
     html += `<div class="ifll-tt-deep" id="ifll-deep-area"><button data-action="deep-analyze" class="ifll-btn-ai" id="ifll-deep-btn">点击生成</button></div>`;
 
-    /* AI Examples placeholder */
     html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">🤖 AI 例句</div>`;
     html += `<div class="ifll-tt-ai" id="ifll-ai-area"><button data-action="ai-examples" class="ifll-btn-ai" id="ifll-ai-btn">生成更多例句</button></div>`;
 
-    /* Actions */
     html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-actions">
       <button data-action="known" class="ifll-btn-known">✓ 认识</button>
       <button data-action="unknown" class="ifll-btn-unknown">✗ 不认识</button>
@@ -292,7 +341,6 @@ const IFLL_INJECTOR = (() => {
 
     tooltipEl.innerHTML = html;
 
-    /* ---- AI button: examples ---- */
     const aiBtn = document.getElementById('ifll-ai-btn');
     if (aiBtn) aiBtn.addEventListener('click', async () => {
       const s = await IFLL_STORAGE.get();
@@ -312,7 +360,6 @@ const IFLL_INJECTOR = (() => {
       }
     });
 
-    /* ---- AI button: deep analysis ---- */
     const deepBtn = document.getElementById('ifll-deep-btn');
     if (deepBtn) deepBtn.addEventListener('click', async () => {
       const s = await IFLL_STORAGE.get();
@@ -337,7 +384,6 @@ const IFLL_INJECTOR = (() => {
       if (area) { area.innerHTML = h || '<div class="ifll-tt-deep-empty">暂无数据</div>'; }
     });
 
-    /* Position */
     const x = rect.left + window.scrollX;
     const y = rect.bottom + window.scrollY + 4;
     tooltipEl.style.left = Math.min(x, window.innerWidth - 400) + 'px';
@@ -364,19 +410,27 @@ const IFLL_INJECTOR = (() => {
     if (tooltipEl && tooltipEl.parentNode) { tooltipEl.parentNode.removeChild(tooltipEl); tooltipEl = null; }
   }
 
-  /* ---- Observer ---- */
+  /* ---- Observer (avoids re-processing marked nodes) ---- */
   let observer = null;
+  let initialInjectionDone = false;
+
   function startObserver(settings) {
     if (observer) observer.disconnect();
     let timer = null;
     observer = new MutationObserver(() => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(async () => {
-        try { const f = await IFLL_STORAGE.get(); if (f.enabled) await inject(document.body, f); } catch (err) { console.warn('[IFLL]', err); }
-      }, 800);
+        try {
+          const f = await IFLL_STORAGE.get();
+          if (!f.enabled) return;
+          await inject(document.body, f);
+          initialInjectionDone = true;
+        } catch (err) { console.warn('[IFLL]', err); }
+      }, 1500); /* Longer debounce to reduce flicker */
     });
     observer.observe(document.body, { childList: true, subtree: true });
   }
+
   function stopObserver() { if (observer) { observer.disconnect(); observer = null; } }
 
   /* ---- Public API ---- */
@@ -387,12 +441,16 @@ const IFLL_INJECTOR = (() => {
       await inject(document.body, s);
       setupTooltipListeners();
       startObserver(s);
+      initialInjectionDone = true;
     } catch (err) { console.warn('[IFLL] init error:', err); }
   }
   function destroy() {
     stopObserver(); removeTooltip();
-    document.querySelectorAll('.ifll-word').forEach(el => {
-      const t = document.createTextNode(el.dataset.zh || el.textContent);
+    document.querySelectorAll('.ifll-word, .ifll-replaced').forEach(el => {
+      const zh = el.classList.contains('ifll-replaced')
+        ? (el.querySelector('.ifll-word')?.dataset?.zh || el.textContent)
+        : (el.dataset?.zh || el.textContent);
+      const t = document.createTextNode(zh);
       el.parentNode.replaceChild(t, el);
     });
   }
