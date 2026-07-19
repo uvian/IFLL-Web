@@ -24,6 +24,7 @@
       "matches": ["http://*/*", "https://*/*"],
       "js": [
         "src/lib/wordbank.js",
+        "src/lib/storage.js",
         "src/lib/injector.js",
         "src/content/content.js"
       ],
