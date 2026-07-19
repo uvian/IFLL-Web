@@ -69,7 +69,7 @@ const IFLL_STORAGE = (() => {
 
   /* Merge user words into the runtime word bank map */
   function buildFullBank(wordBank, userWords) {
-    const map = new Map(wordBank);
+    const map = new Map(WORD_BANK_MAP);
     for (const uw of userWords) {
       if (!map.has(uw.zh)) map.set(uw.zh, uw);
     }
