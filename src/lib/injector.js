@@ -174,13 +174,16 @@ const IFLL_INJECTOR = (() => {
     const settings = await IFLL_STORAGE.get();
     if (!settings.apiKey) return { error: 'no api key' };
     try {
-      const result = await chrome.runtime.sendMessage({
-        type: 'IFLL_AI_EXAMPLES',
-        en, zh,
-        apiKey: settings.apiKey,
-        apiEndpoint: settings.apiEndpoint,
-        apiModel: settings.apiModel
-      });
+      const result = await Promise.race([
+        chrome.runtime.sendMessage({
+          type: 'IFLL_AI_EXAMPLES',
+          en, zh,
+          apiKey: settings.apiKey,
+          apiEndpoint: settings.apiEndpoint,
+          apiModel: settings.apiModel
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout (15s)')), 15000))
+      ]);
       if (!result) return { error: 'no response from background' };
       if (result.error) return { error: result.error };
       return { success: true, examples: result.examples || [] };
@@ -191,6 +194,9 @@ const IFLL_INJECTOR = (() => {
 
   /* ---- Show tooltip ---- */
   async function showTooltip(e) {
+    /* Prevent link navigation when clicking a replaced word inside <a> */
+    e.preventDefault();
+    e.stopPropagation();
     const span = e.target.closest('.ifll-word');
     if (!span) return;
 

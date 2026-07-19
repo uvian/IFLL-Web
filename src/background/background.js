@@ -18,24 +18,36 @@ chrome.runtime.onInstalled.addListener(async () => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'IFLL_AI_EXAMPLES') {
     handleAiExamples(message.en, message.zh, message.apiKey, message.apiEndpoint, message.apiModel)
-      .then(sendResponse);
+      .then(sendResponse).catch(err => sendResponse({ error: err.message }));
     return true;
   }
   if (message.type === 'IFLL_TEST_API') {
     testApiConnection(message.apiKey, message.apiEndpoint, message.apiModel)
-      .then(sendResponse);
+      .then(sendResponse).catch(err => sendResponse({ error: err.message }));
     return true;
   }
   if (message.type === 'IFLL_LIST_MODELS') {
     listModels(message.apiKey, message.apiEndpoint)
-      .then(sendResponse);
+      .then(sendResponse).catch(err => sendResponse({ error: err.message }));
     return true;
   }
 });
 
 async function apiFetch(endpoint, path, headers, body) {
   const baseUrl = (endpoint || 'https://api.deepseek.com').replace(/\/+$/, '');
-  return fetch(baseUrl + path, { method: body ? 'POST' : 'GET', headers, body: body ? JSON.stringify(body) : undefined });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  try {
+    const resp = await fetch(baseUrl + path, {
+      method: body ? 'POST' : 'GET',
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal
+    });
+    return resp;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function handleAiExamples(en, zh, apiKey, apiEndpoint, apiModel) {
