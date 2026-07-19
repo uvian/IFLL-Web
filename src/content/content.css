@@ -222,6 +222,32 @@
   white-space: nowrap;
 }
 
+/* Speaker button */
+.ifll-btn-speak {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 2px;
+  margin-left: 4px;
+  vertical-align: middle;
+  opacity: 0.6;
+  transition: opacity 0.12s, transform 0.12s;
+  line-height: 1;
+}
+.ifll-btn-speak:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+/* IPA text */
+.ifll-tt-ipa {
+  font-family: 'Menlo', 'Consolas', 'Courier New', monospace;
+  font-size: 13px;
+  color: #d1d5db;
+  letter-spacing: 0.3px;
+}
+
 /* Deep analysis section */
 .ifll-tt-deep {
   margin: 4px 0;

@@ -26,6 +26,7 @@ const IFLL_INJECTOR = (() => {
           pos: entry.pos || 'noun', posCn: entry.pos_cn || '名词',
           examples: entry.examples || (entry.example ? [entry.example] : []),
           examplesCn: entry.examplesCn || (entry.example_cn ? [entry.example_cn] : []),
+          ipa: entry.ipa || '',
           level: entry.level, idx, end: idx + zh.length
         });
         idx += zh.length;
@@ -70,6 +71,7 @@ const IFLL_INJECTOR = (() => {
       span.dataset.posCn = m.posCn;
       span.dataset.examples = JSON.stringify(m.examples);
       span.dataset.examplesCn = JSON.stringify(m.examplesCn);
+      span.dataset.ipa = m.ipa || '';
       span.textContent = m.en;
       const wrapper = document.createElement('span');
       wrapper.appendChild(span);
@@ -132,6 +134,19 @@ const IFLL_INJECTOR = (() => {
     return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
   function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  /* Speak word using browser's speech synthesis */
+  function speakWord(word) {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel(); // stop any ongoing speech
+      const utterance = new SpeechSynthesisUtterance(word);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.85;
+      utterance.pitch = 1;
+      window.speechSynthesis.speak(utterance);
+    }
+  }
+
   function renderBoldHtml(text) {
     if (!text) return '';
     const regex = /\*\*(.+?)\*\*/g;
@@ -217,6 +232,8 @@ const IFLL_INJECTOR = (() => {
             examples: examples, examplesCn: examplesCn
           });
           btn.textContent = added ? '✓ 已添加' : '已存在'; btn.disabled = true;
+        } else if (btn.dataset.action === 'speak') {
+          speakWord(tooltipEl.dataset.en);
         }
       });
     }
@@ -227,10 +244,13 @@ const IFLL_INJECTOR = (() => {
     /* Build HTML */
     let html = `
       <div class="ifll-tt-header">
-        <div class="ifll-tt-en">${htmlEncode(en)}</div>
+        <div class="ifll-tt-en">
+          ${htmlEncode(en)}
+          <button data-action="speak" class="ifll-btn-speak" title="朗读发音">🔊</button>
+        </div>
         <div class="ifll-tt-level">${htmlEncode(span.dataset.level || '')}</div>
       </div>
-      <div class="ifll-tt-meta">${htmlEncode(zh)} · <span class="ifll-tt-pos">${posLatin}</span> ${htmlEncode(posCn)}</div>
+      <div class="ifll-tt-meta">${htmlEncode(zh)}${span.dataset.ipa ? ' · <span class="ifll-tt-ipa">' + htmlEncode(span.dataset.ipa) + '</span>' : ''} · <span class="ifll-tt-pos">${posLatin}</span> ${htmlEncode(posCn)}</div>
       <div class="ifll-tt-divider"></div>
       <div class="ifll-tt-def">${def}</div>`;
 
