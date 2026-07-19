@@ -134,23 +134,59 @@ const IFLL_INJECTOR = (() => {
     return matches;
   }
 
-  /* ---- Selection: prefers multi-char, spread evenly ---- */
-  function selectMatches(matches, count) {
+  /* ---- Scene detection (context-aware selection) ---- */
+  const SCENE_KEYS = {
+    social:  ['daily', 'verb', 'adj', 'adv', 'emotion'],
+    academic:['abstract', 'academic', 'graduate', 'noun', 'cet6'],
+    tech:    ['tech', 'cet6', 'verb', 'noun'],
+    general: [] /* all categories */
+  };
+  function detectScene() {
+    const host = window.location.hostname;
+    const url = window.location.href;
+    /* URL-based detection */
+    if (/zhihu\.com|weibo\.com|bilibili\.com|douban\.com|xiaohongshu|tieba\.baidu|reddit\.com|quora\.com/i.test(host)) return 'social';
+    if (/github\.com|stackoverflow|stackexchange|npmjs\.com|pypi\.org|docs\.\w+\.(com|org)|developer\./i.test(host)) return 'tech';
+    if (/arxiv\.org|scholar\.google|cnki\.net|researchgate\.net|acm\.org|ieee\.org/i.test(host)) return 'academic';
+    if (/news\.|\.news|sina\.com\.cn|163\.com|thepaper\.cn|bbc\.com|cnn\.com/i.test(host)) return 'general';
+    /* Meta tag detection */
+    const type = document.querySelector('meta[property="og:type"]')?.content || '';
+    if (/article|news/.test(type)) return 'general';
+    if (/website|blog/.test(type)) return 'social';
+    /* Content heuristic: check for academic/tech keywords in page */
+    if (document.body) {
+      const text = document.body.textContent || '';
+      const sample = text.slice(0, 6000);
+      const techScore = (sample.match(/algorithm|function|class|import|export|api|git|代码|编程|程序/gi) || []).length;
+      const acadScore = (sample.match(/research|study|analysis|theory|equation|实验|研究|论文|理论/gi) || []).length;
+      if (techScore > 5) return 'tech';
+      if (acadScore > 5) return 'academic';
+    }
+    return 'general';
+  }
+
+  function getSceneCategory(scene) {
+    return SCENE_KEYS[scene] || [];
+  }
+
+  /* ---- Selection: scene-aware, prefers multi-char, spread evenly ---- */
+  function selectMatches(matches, count, scene) {
     if (matches.length <= count) return matches;
-    /* Prioritize multi-character matches */
-    const multi = matches.filter(m => m.len >= 2);
-    const single = matches.filter(m => m.len < 2);
-    const ordered = [...multi, ...single];
+    const sceneCats = getSceneCategory(scene);
+    /* Score each match: scene-relevant words get priority */
+    const scored = matches.map(m => ({
+      ...m,
+      score: 0 + (m.len >= 2 ? 10 : 0) + (sceneCats.includes(m.cat) ? 5 : 0) + (sceneCats.includes(m.pos) ? 2 : 0)
+    }));
+    scored.sort((a, b) => b.score - a.score);
     const selected = [];
     let lastEnd = -1;
-    for (const m of ordered) {
+    for (const m of scored) {
       if (selected.length >= count) break;
-      /* Space replacements at least 5 chars apart to avoid dense clusters */
       if (m.idx >= lastEnd + 5) { selected.push(m); lastEnd = m.end; }
     }
-    /* If still under count, fill with remaining matches regardless of spacing */
     if (selected.length < count) {
-      for (const m of ordered) {
+      for (const m of scored) {
         if (selected.length >= count) break;
         if (!selected.includes(m)) selected.push(m);
       }
@@ -214,8 +250,10 @@ const IFLL_INJECTOR = (() => {
     const hostname = window.location.hostname;
     if (excludedSites && excludedSites.some(s => hostname.includes(s) || s.includes(hostname))) return;
     const knownSet = new Set(knownWords);
-    /* Ensure Aho-Corasick automaton is built (cached) */
     getAutomaton(settings);
+    /* Scene-aware: detect once per page */
+    const scene = detectScene();
+    if (scene !== 'general') console.log('[IFLL] Scene:', scene);
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
     const textNodes = [];
     let node;
@@ -231,7 +269,7 @@ const IFLL_INJECTOR = (() => {
       const matches = findMatches(text, null, knownSet, level);
       if (!matches.length) continue;
       const count = getReplaceCount(frequency, text.length);
-      const selected = selectMatches(matches, count);
+      const selected = selectMatches(matches, count, scene);
       if (selected.length) replaceInTextNode(tn, selected);
     }
   }
