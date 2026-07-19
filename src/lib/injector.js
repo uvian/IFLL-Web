@@ -2,7 +2,6 @@
 const IFLL_INJECTOR = (() => {
   /* ---- Config helpers ---- */
   function getReplaceCount(frequency, textLen) {
-    // How many words to replace per segment
     const ratios = { low: 0.005, medium: 0.015, high: 0.03 };
     const ratio = ratios[frequency] || ratios.medium;
     return Math.max(1, Math.min(5, Math.round(textLen * ratio)));
@@ -21,7 +20,6 @@ const IFLL_INJECTOR = (() => {
         idx += zh.length;
       }
     }
-    // Sort by position
     matches.sort((a, b) => a.idx - b.idx);
     return matches;
   }
@@ -34,7 +32,6 @@ const IFLL_INJECTOR = (() => {
   /* ---- Selection ---- */
   function selectMatches(matches, count) {
     if (matches.length <= count) return matches;
-    // Prefer words at different positions, not clustered
     const selected = [];
     let lastEnd = -1;
     for (const m of matches) {
@@ -44,7 +41,6 @@ const IFLL_INJECTOR = (() => {
         lastEnd = m.end;
       }
     }
-    // If we couldn't get enough, relax and pack more
     if (selected.length < count) {
       for (const m of matches) {
         if (selected.length >= count) break;
@@ -58,12 +54,10 @@ const IFLL_INJECTOR = (() => {
   function replaceInTextNode(node, matches) {
     if (!matches.length || !node.parentNode) return;
 
-    // Sort by position descending so we can split without offset chaos
     const sorted = [...matches].sort((a, b) => b.idx - a.idx);
     let text = node.textContent;
     const fragment = document.createDocumentFragment();
 
-    // Build replacement from last match to first
     let lastEnd = text.length;
     for (const m of sorted) {
       const after = text.slice(m.end, lastEnd);
@@ -82,7 +76,6 @@ const IFLL_INJECTOR = (() => {
       text = text.slice(0, m.idx);
       fragment.appendChild(wrapper);
     }
-    // Whatever is left before all matches
     if (lastEnd > 0) {
       const before = document.createTextNode(text);
       fragment.insertBefore(before, fragment.firstChild);
@@ -102,8 +95,10 @@ const IFLL_INJECTOR = (() => {
   function shouldSkipAncestor(node) {
     let el = node.parentElement;
     while (el) {
+      // Skip if inside an already-injected IFLL word or non-content container
+      if (el.classList && el.classList.contains('ifll-word')) return true;
       if (el.closest) {
-        if (el.closest('script, style, noscript, textarea, input, select, option, iframe, svg, code, pre, canvas, [contenteditable="true"]')) {
+        if (el.closest('script, style, noscript, textarea, input, select, option, iframe, svg, code, pre, canvas, .ifll-word, [contenteditable="true"]')) {
           return true;
         }
       }
@@ -123,7 +118,6 @@ const IFLL_INJECTOR = (() => {
 
     let node;
     while ((node = walker.nextNode())) {
-      // Must have Chinese chars
       if (!/[\u4e00-\u9fff]/.test(node.textContent)) continue;
       if (shouldSkip(node) || shouldSkipAncestor(node)) continue;
       textNodes.push(node);
@@ -149,7 +143,7 @@ const IFLL_INJECTOR = (() => {
     const span = e.target.closest('.ifll-word');
     if (!span) return;
 
-    const rect = span.getContext('boundingClientRect') || span.getBoundingClientRect();
+    const rect = span.getBoundingClientRect();
     const en = span.dataset.en;
     const zh = span.dataset.zh;
     const def = span.dataset.def || en;
@@ -167,7 +161,6 @@ const IFLL_INJECTOR = (() => {
           await IFLL_STORAGE.markKnown(zhWord);
           btn.textContent = '✓ 已掌握';
           btn.disabled = true;
-          // Remove this word's highlighting
           document.querySelectorAll(`.ifll-word[data-zh="${zhWord}"]`).forEach(el => el.classList.add('ifll-known'));
         } else if (btn.dataset.action === 'unknown') {
           await IFLL_STORAGE.markUnknown(zhWord);
@@ -179,15 +172,14 @@ const IFLL_INJECTOR = (() => {
 
     tooltipEl.dataset.zh = zh;
     tooltipEl.innerHTML = `
-      <div class="ifll-tooltip-en">${en}</div>
-      <div class="ifll-tooltip-def">${def}</div>
+      <div class="ifll-tooltip-en">${en.replace(/'/g, '&#39;')}</div>
+      <div class="ifll-tooltip-def">${def.replace(/'/g, '&#39;')}</div>
       <div class="ifll-tooltip-actions">
         <button data-action="known" class="ifll-btn-known">✓ 认识</button>
         <button data-action="unknown" class="ifll-btn-unknown">✗ 不认识</button>
       </div>
     `;
 
-    // Position
     const x = rect.left + window.scrollX;
     const y = rect.bottom + window.scrollY + 4;
     tooltipEl.style.left = Math.min(x, window.innerWidth - 260) + 'px';
@@ -204,7 +196,6 @@ const IFLL_INJECTOR = (() => {
   function setupTooltipListeners() {
     document.addEventListener('click', showTooltip);
     document.addEventListener('mouseover', (e) => {
-      // Show on hover as quick preview
       const word = e.target.closest('.ifll-word');
       if (word) {
         word.title = `${word.dataset.en} — ${word.dataset.def || ''} [click for more]`;
@@ -229,9 +220,16 @@ const IFLL_INJECTOR = (() => {
     let timer = null;
     observer = new MutationObserver(() => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        inject(document.body, settings);
-      }, 800); // debounce 800ms
+      timer = setTimeout(async () => {
+        try {
+          const fresh = await IFLL_STORAGE.get();
+          if (fresh.enabled) {
+            await inject(document.body, fresh);
+          }
+        } catch (err) {
+          console.warn('[IFLL] inject error:', err);
+        }
+      }, 800);
     });
 
     observer.observe(document.body, {
@@ -261,7 +259,6 @@ const IFLL_INJECTOR = (() => {
   function destroy() {
     stopObserver();
     removeTooltip();
-    // Remove injected spans
     document.querySelectorAll('.ifll-word').forEach(el => {
       const text = document.createTextNode(el.dataset.zh || el.textContent);
       el.parentNode.replaceChild(text, el);
