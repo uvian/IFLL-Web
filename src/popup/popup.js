@@ -144,6 +144,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     importInput.value = '';
   });
 
+  const excludeCurrent = document.getElementById('excludeCurrent');
+  if (excludeCurrent) {
+    excludeCurrent.addEventListener('click', async () => {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tabs[0]) return;
+      const url = new URL(tabs[0].url);
+      const hostname = url.hostname;
+      const { excludedSites = [] } = await IFLL_STORAGE.get();
+      if (!excludedSites.includes(hostname)) {
+        excludedSites.push(hostname);
+        await savePartial({ excludedSites });
+      }
+      renderExcludedSites(excludedSites);
+      const excludedCountEl = document.getElementById('excludedCount');
+      if (excludedCountEl) excludedCountEl.textContent = excludedSites.length;
+      excludeCurrent.textContent = '✅ 已排除 ' + hostname;
+      setTimeout(() => { excludeCurrent.textContent = '⛔ 排除当前页面'; }, 2000);
+    });
+  }
+
   if (clearExcluded) {
     clearExcluded.addEventListener('click', async () => {
       await savePartial({ excludedSites: [] });
