@@ -16,7 +16,12 @@ const IFLL_INJECTOR = (() => {
 
       let idx = 0;
       while ((idx = text.indexOf(zh, idx)) !== -1) {
-        matches.push({ zh, en: entry.en, def: entry.def || entry.en, level: entry.level, idx, end: idx + zh.length });
+        matches.push({
+          zh, en: entry.en, def: entry.def || entry.en,
+          pos: entry.pos || 'noun', pos_cn: entry.pos_cn || '名词',
+          example: entry.example || '', example_cn: entry.example_cn || '',
+          level: entry.level, idx, end: idx + zh.length
+        });
         idx += zh.length;
       }
     }
@@ -50,7 +55,7 @@ const IFLL_INJECTOR = (() => {
     return selected;
   }
 
-  /* ---- Text node replacement ---- */
+  /* ---- Text node replacement: Chinese word → English word on page ---- */
   function replaceInTextNode(node, matches) {
     if (!matches.length || !node.parentNode) return;
 
@@ -66,7 +71,12 @@ const IFLL_INJECTOR = (() => {
       span.dataset.en = m.en;
       span.dataset.zh = m.zh;
       span.dataset.def = m.def;
-      span.textContent = m.zh;
+      span.dataset.pos = m.pos;
+      span.dataset.posCn = m.pos_cn;
+      span.dataset.example = m.example || '';
+      span.dataset.exampleCn = m.example_cn || '';
+      // Replace with ENGLISH word on the page
+      span.textContent = m.en;
 
       const wrapper = document.createElement('span');
       wrapper.appendChild(span);
@@ -95,12 +105,9 @@ const IFLL_INJECTOR = (() => {
   function shouldSkipAncestor(node) {
     let el = node.parentElement;
     while (el) {
-      // Skip if inside an already-injected IFLL word or non-content container
       if (el.classList && el.classList.contains('ifll-word')) return true;
       if (el.closest) {
-        if (el.closest('script, style, noscript, textarea, input, select, option, iframe, svg, code, pre, canvas, .ifll-word, [contenteditable="true"]')) {
-          return true;
-        }
+        if (el.closest('script, style, noscript, textarea, input, select, option, iframe, svg, code, pre, canvas, .ifll-word, [contenteditable="true"]')) return true;
       }
       el = el.parentElement;
     }
@@ -136,8 +143,17 @@ const IFLL_INJECTOR = (() => {
     }
   }
 
-  /* ---- Tooltip system ---- */
+  /* ---- Tooltip system: new design ---- */
   let tooltipEl = null;
+
+  function htmlEncode(str) {
+    return (str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
 
   function showTooltip(e) {
     const span = e.target.closest('.ifll-word');
@@ -145,8 +161,11 @@ const IFLL_INJECTOR = (() => {
 
     const rect = span.getBoundingClientRect();
     const en = span.dataset.en;
-    const zh = span.dataset.zh;
-    const def = span.dataset.def || en;
+    const zh = htmlEncode(span.dataset.zh);
+    const def = htmlEncode(span.dataset.def || en);
+    const posCn = htmlEncode(span.dataset.posCn || '');
+    const example = htmlEncode(span.dataset.example || '');
+    const exampleCn = htmlEncode(span.dataset.exampleCn || '');
 
     if (!tooltipEl) {
       tooltipEl = document.createElement('div');
@@ -170,19 +189,50 @@ const IFLL_INJECTOR = (() => {
       });
     }
 
-    tooltipEl.dataset.zh = zh;
-    tooltipEl.innerHTML = `
-      <div class="ifll-tooltip-en">${en.replace(/'/g, '&#39;')}</div>
-      <div class="ifll-tooltip-def">${def.replace(/'/g, '&#39;')}</div>
-      <div class="ifll-tooltip-actions">
+    tooltipEl.dataset.zh = span.dataset.zh;
+
+    /* Build tooltip HTML */
+    let html = `
+      <div class="ifll-tt-en">${htmlEncode(en)}</div>
+      <div class="ifll-tt-meta">${zh} · ${posCn}</div>
+      <div class="ifll-tt-divider"></div>
+      <div class="ifll-tt-label">Definition</div>
+      <div class="ifll-tt-def">${def}</div>
+    `;
+
+    /* Add example section if data available */
+    if (example) {
+      html += `
+        <div class="ifll-tt-divider"></div>
+        <div class="ifll-tt-label">Example</div>
+        <div class="ifll-tt-example">"${example}"</div>
+        <div class="ifll-tt-trans">${exampleCn}</div>
+      `;
+    }
+
+    html += `
+      <div class="ifll-tt-actions">
         <button data-action="known" class="ifll-btn-known">✓ 认识</button>
         <button data-action="unknown" class="ifll-btn-unknown">✗ 不认识</button>
       </div>
     `;
 
+    tooltipEl.innerHTML = html;
+
+    /* Bold the Chinese word in example translation */
+    if (example) {
+      const transDiv = tooltipEl.querySelector('.ifll-tt-trans');
+      if (transDiv) {
+        const word = span.dataset.zh;
+        const regex = new RegExp(htmlEncode(word).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+        transDiv.innerHTML = transDiv.textContent.replace(regex, `<strong class="ifll-tt-bold">${htmlEncode(word)}</strong>`);
+      }
+    }
+
+    /* Position the tooltip */
     const x = rect.left + window.scrollX;
     const y = rect.bottom + window.scrollY + 4;
-    tooltipEl.style.left = Math.min(x, window.innerWidth - 260) + 'px';
+    tooltipEl.style.left = Math.min(x, window.innerWidth - 360) + 'px';
     tooltipEl.style.top = y + 'px';
     tooltipEl.style.display = 'block';
   }
@@ -198,7 +248,7 @@ const IFLL_INJECTOR = (() => {
     document.addEventListener('mouseover', (e) => {
       const word = e.target.closest('.ifll-word');
       if (word) {
-        word.title = `${word.dataset.en} — ${word.dataset.def || ''} [click for more]`;
+        word.title = `${word.dataset.en} = ${word.dataset.zh} [click for details]`;
       }
     });
     document.addEventListener('click', hideTooltip, true);
@@ -211,7 +261,7 @@ const IFLL_INJECTOR = (() => {
     }
   }
 
-  /* ---- MutationObserver for dynamic content ---- */
+  /* ---- MutationObserver ---- */
   let observer = null;
 
   function startObserver(settings) {
