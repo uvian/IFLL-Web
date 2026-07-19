@@ -105,7 +105,7 @@ const IFLL_INJECTOR = (() => {
     let el = node.parentElement;
     while (el) {
       if (el.classList && el.classList.contains('ifll-word')) return true;
-      if (el.closest && el.closest('script, style, noscript, textarea, input, select, option, iframe, svg, code, pre, canvas, .ifll-word, [contenteditable="true"]')) return true;
+      if (el.closest && el.closest('script, style, noscript, textarea, input, select, option, iframe, svg, code, pre, canvas, .ifll-word, .ifll-tooltip, [contenteditable="true"]')) return true;
       el = el.parentElement;
     }
     return false;
