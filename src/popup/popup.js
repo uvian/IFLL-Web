@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   knownCount.textContent = (settings.knownWords || []).length;
 
   /* Restore API endpoint */
-  const defaultEndpoints = ['https://api.deepseek.com', 'https://api.openai.com/v1', 'https://openrouter.ai/api/v1'];
+  const defaultEndpoints = ['https://api.deepseek.com', 'https://opencode.ai/zen/go/v1', 'https://api.openai.com/v1', 'https://openrouter.ai/api/v1'];
   if (defaultEndpoints.includes(settings.apiEndpoint)) {
     apiEndpoint.value = settings.apiEndpoint;
   } else {
@@ -103,6 +103,46 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   refreshBtn.addEventListener('click', () => { chrome.tabs.reload(); });
+
+  /* ── Import / Export ── */
+  const exportBtn = document.getElementById('exportConfig');
+  const importBtn = document.getElementById('importConfig');
+  const importInput = document.getElementById('importFileInput');
+
+  exportBtn.addEventListener('click', async () => {
+    const all = await chrome.storage.sync.get(null);
+    const blob = new Blob([JSON.stringify(all, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ifll-config.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  importBtn.addEventListener('click', () => { importInput.click(); });
+
+  importInput.addEventListener('change', async () => {
+    const file = importInput.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      /* Only import known keys */
+      const allowed = ['enabled','frequency','level','knownWords','excludedSites','apiKey','apiEndpoint','apiModel'];
+      const clean = {};
+      for (const k of allowed) {
+        if (k in data) clean[k] = data[k];
+      }
+      await chrome.storage.sync.set(clean);
+      importBtn.textContent = '✅ 已导入';
+      setTimeout(() => { location.reload(); }, 1200);
+    } catch (err) {
+      importBtn.textContent = '❌ 文件无效';
+      setTimeout(() => { importBtn.textContent = '📥 导入配置'; }, 2500);
+    }
+    importInput.value = '';
+  });
 
   if (clearExcluded) {
     clearExcluded.addEventListener('click', async () => {
