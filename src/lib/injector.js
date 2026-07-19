@@ -153,6 +153,22 @@ const IFLL_INJECTOR = (() => {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
+  /* Parse **word** markers → bold HTML, htmlEncode everything else */
+  function renderBoldHtml(text) {
+    if (!text) return '';
+    const regex = /\*\*(.+?)\*\*/g;
+    let result = '';
+    let lastIdx = 0;
+    let m;
+    while ((m = regex.exec(text)) !== null) {
+      result += htmlEncode(text.slice(lastIdx, m.index));
+      result += '<strong class="ifll-tt-bold">' + htmlEncode(m[1]) + '</strong>';
+      lastIdx = regex.lastIndex;
+    }
+    result += htmlEncode(text.slice(lastIdx));
+    return result;
+  }
+
   /* ---- AI example fetch — routes through background worker (handles auth/networking) ---- */
   async function fetchAiExamples(en, zh) {
     const settings = await IFLL_STORAGE.get();
@@ -256,7 +272,7 @@ const IFLL_INJECTOR = (() => {
         const tcn = examplesCn[i] || '';
         html += `<div class="ifll-tt-example">"${ex}"</div>`;
         if (tcn) {
-          html += `<div class="ifll-tt-trans">${htmlEncode(tcn)}</div>`;
+          html += `<div class="ifll-tt-trans">${renderBoldHtml(tcn)}</div>`;
         }
       }
     }
@@ -277,15 +293,6 @@ const IFLL_INJECTOR = (() => {
     `;
 
     tooltipEl.innerHTML = html;
-
-    /* Bold the target word in each example translation */
-    const transDivs = tooltipEl.querySelectorAll('.ifll-tt-trans');
-    const word = span.dataset.zh;
-    const wordRegex = new RegExp(escapeRegex(word), 'g');
-    transDivs.forEach(div => {
-      const txt = div.textContent;
-      div.innerHTML = txt.replace(wordRegex, `<strong class="ifll-tt-bold">${htmlEncode(word)}</strong>`);
-    });
 
     /* ---- AI button handler ---- */
     const aiBtn = document.getElementById('ifll-ai-btn');
@@ -310,18 +317,13 @@ const IFLL_INJECTOR = (() => {
           let aiHtml = `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">AI Examples</div>`;
           for (const r of result) {
             const ex = htmlEncode(r.en || '');
-            const tcn = htmlEncode(r.cn || '');
+            const tcn = renderBoldHtml(r.cn || '');
             aiHtml += `<div class="ifll-tt-example ifll-tt-ai-example">"${ex}"</div>`;
             if (tcn) {
               aiHtml += `<div class="ifll-tt-trans">${tcn}</div>`;
             }
           }
           aiArea.innerHTML = aiHtml;
-          /* Bold target words in AI translations */
-          tooltipEl.querySelectorAll('.ifll-tt-ai-example ~ .ifll-tt-trans').forEach(div => {
-            const txt = div.textContent;
-            div.innerHTML = txt.replace(wordRegex, `<strong class="ifll-tt-bold">${htmlEncode(word)}</strong>`);
-          });
         }
       });
     }
