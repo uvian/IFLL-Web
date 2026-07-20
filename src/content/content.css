@@ -518,3 +518,14 @@
   padding: 0 5px;
   margin-left: 2px;
 }
+
+/* ── Smooth (sentence-level) replacement ── */
+.ifll-replaced-smooth .ifll-word {
+  color: #1d4ed8;
+  border-bottom: 1px dashed #93c5fd;
+  font-style: italic;
+}
+.ifll-replaced-smooth .ifll-word:hover {
+  background: rgba(37,99,235,0.04);
+  border-radius: 2px;
+}

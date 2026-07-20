@@ -310,9 +310,31 @@ const IFLL_INJECTOR = (() => {
 
   function createTranslatePanel(text) {
     const div = document.createElement('div');
-    div.className = 'ifll-trans-panel';
+    div.className = 'ifll-tt-sentence';
     div.textContent = text;
     return div;
+  }
+
+  /* ── Translate a single text node (A: sentence-level fallback) ── */
+  async function translateTextNode(node, text, settings) {
+    try {
+      const result = await chrome.runtime.sendMessage({
+        type: 'IFLL_AI_TRANSLATE',
+        text,
+        apiKey: settings.apiKey,
+        apiEndpoint: settings.apiEndpoint,
+        apiModel: settings.apiModel
+      });
+      if (result?.success && result.translation) {
+        const wrapper = document.createElement('span');
+        wrapper.className = 'ifll-replaced ifll-replaced-smooth';
+        const span = document.createElement('span');
+        span.className = 'ifll-word';
+        span.textContent = result.translation;
+        wrapper.appendChild(span);
+        node.parentNode.replaceChild(wrapper, node);
+      }
+    } catch (_) {}
   }
 
   /* ---- Skip helpers ---- */
@@ -397,7 +419,24 @@ const IFLL_INJECTOR = (() => {
       if (!matches.length) continue;
       const count = getReplaceCount(frequency, text.length);
       const selected = selectMatches(matches, count, scene);
-      if (selected.length) { replaceInTextNode(tn, selected, dailyWordSet); totalReplaced += selected.length; }
+      if (!selected.length) continue;
+
+      /* ── Fragment detection: if multiple replacements would fracture the sentence,
+             fall back to full-sentence translation (A) or phrase-first (C) ── */
+      if (selected.length >= 2) {
+        let fragments = 0;
+        for (let i = 1; i < selected.length; i++) {
+          const gap = text.slice(selected[i-1].end, selected[i].idx);
+          if (gap.length < 5 && /[的地得了着过和与在就是都也]/ .test(gap)) fragments++;
+        }
+        /* If ≥2 short gaps with function words → would read like "today的 weather很好" */
+        if (fragments >= 2 && settings.apiKey) {
+          await translateTextNode(tn, text, settings);
+          totalReplaced++;
+          continue;
+        }
+      }
+      replaceInTextNode(tn, selected, dailyWordSet); totalReplaced += selected.length;
     }
     if (totalReplaced > 0) IFLL_STORAGE.trackStat('replace', totalReplaced).catch(() => {});
   }
