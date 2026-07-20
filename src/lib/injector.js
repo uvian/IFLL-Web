@@ -233,7 +233,7 @@ const IFLL_INJECTOR = (() => {
       for (let i = 0; i < words.length; i++) {
         const word = words[i].toLowerCase().replace(/[^a-z-]/g, '');
         const entry = word.length >= 3 ? bank.get(word) : null;
-        if (entry && annotateCount < 15) {
+        if (entry && annotateCount < 80) {
           const span = document.createElement('span');
           span.className = 'ifll-annotated';
           span.dataset.en = entry.en;
@@ -315,6 +315,26 @@ const IFLL_INJECTOR = (() => {
     return div;
   }
 
+  /* ── Annotate individual words within a text string (for sentence translation) ── */
+  function annotateWords(container, text, bank) {
+    const words = text.split(/\b/);
+    for (const chunk of words) {
+      const cleaned = chunk.toLowerCase().replace(/[^a-z-]/g, '');
+      const entry = cleaned.length >= 2 ? bank.get(cleaned) : null;
+      if (entry) {
+        const s = document.createElement('span');
+        s.className = 'ifll-annotated';
+        s.dataset.en = entry.en; s.dataset.zh = entry.zh; s.dataset.def = entry.def || entry.en;
+        s.dataset.pos = entry.pos || 'noun'; s.dataset.posCn = entry.pos_cn || '名词';
+        s.dataset.ipa = entry.ipa || ''; s.dataset.examples = '[]'; s.dataset.examplesCn = '[]';
+        s.textContent = chunk; s.title = entry.zh;
+        container.appendChild(s);
+      } else {
+        container.appendChild(document.createTextNode(chunk));
+      }
+    }
+  }
+
   /* ── Translate a single text node (A: sentence-level fallback) ── */
   async function translateTextNode(node, text, settings) {
     try {
@@ -328,10 +348,11 @@ const IFLL_INJECTOR = (() => {
       if (result?.success && result.translation) {
         const wrapper = document.createElement('span');
         wrapper.className = 'ifll-replaced ifll-replaced-smooth';
-        const span = document.createElement('span');
-        span.className = 'ifll-word';
-        span.textContent = result.translation;
-        wrapper.appendChild(span);
+        const inner = document.createElement('span');
+        inner.className = 'ifll-word';
+        /* Annotate individual words from the translated sentence */
+        annotateWords(inner, result.translation, getEnWordBank());
+        wrapper.appendChild(inner);
         node.parentNode.replaceChild(wrapper, node);
       }
     } catch (_) {}

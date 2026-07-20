@@ -31,15 +31,17 @@
       requestAnimationFrame(() => bar.classList.add('ifll-prompt-show'));
       const pbar = bar.querySelector('.ifll-prompt-bar');
       requestAnimationFrame(() => { pbar.style.transition = 'width 8s linear'; pbar.style.width = '0%'; });
-      const timer = setTimeout(() => dismiss('replace'), 8000);
+      const timer = setTimeout(() => dismiss('off'), 8000);
 
-      function dismiss(mode) {
+      function dismiss(mode, clicked = false) {
         clearTimeout(timer);
         bar.classList.remove('ifll-prompt-show');
         bar.classList.add('ifll-prompt-hide');
         setTimeout(async () => {
           bar.remove();
           sessionStorage.setItem('ifll_decision_' + hostname, mode);
+          /* Only persist if the user actively clicked — timeout default is transient */
+          if (!clicked && mode === 'off') { resolve('off'); return; }
           if (mode === 'off') {
             const { excludedSites = [] } = await IFLL_STORAGE.get();
             if (!excludedSites.includes(hostname)) {
@@ -53,7 +55,7 @@
         }, 400);
       }
       bar.querySelectorAll('.ifll-prompt-btn').forEach(btn => {
-        btn.addEventListener('click', () => dismiss(btn.dataset.mode));
+        btn.addEventListener('click', () => dismiss(btn.dataset.mode, true));
       });
     });
   }
