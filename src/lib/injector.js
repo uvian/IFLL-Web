@@ -534,7 +534,7 @@ const IFLL_INJECTOR = (() => {
       if (!result || result.error) return { error: (result && result.error) || 'no response' };
       /* Save to cache (permanent) */
       const entry = cacheEntry || {};
-      entry.deep = result; entry.deepCachedAt = now;
+      entry.deep = result; entry.deepCachedAt = Date.now();
       await IFLL_STORAGE.setAiCacheEntry(en, entry);
       return { success: true, data: result };
     } catch (err) { return { error: err.message }; }
