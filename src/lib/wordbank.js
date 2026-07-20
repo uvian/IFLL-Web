@@ -6645,7 +6645,7 @@ const WORD_BANK = [
   { zh: '审美', en: 'aesthetic',
     ipa: '/ɛsθɛtɪk/', def: 'concerned with beauty or appreciation of beauty', level: 'graduate', cat: 'adj', pos: 'adjective', pos_cn: '形容词', example: 'Aesthetic taste varies among individuals.', example_cn: '**审美**品味因人而异。' },
   { zh: '道义', en: 'moral duty', def: 'a moral obligation', level: 'graduate', cat: 'abstract', pos: 'noun', pos_cn: '名词' },
-,
+
   { zh: '把握', en: 'grasp',
     ipa: '/ɡræsp/', def: 'to seize', level: 'cet4', cat: 'verb', pos: 'verb', pos_cn: '动词' },
   { zh: '被动', en: 'passive',
