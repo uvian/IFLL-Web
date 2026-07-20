@@ -685,9 +685,9 @@ const IFLL_INJECTOR = (() => {
       if (!r.examples?.length) { aiBtn.textContent = '⚠️ 返回为空'; aiBtn.disabled = false; return; }
       const area = document.getElementById('ifll-ai-area');
       if (area) area.innerHTML = r.examples.map(ex =>
-        `<div class="ifll-tt-example ifll-tt-ai-example">"${htmlEncode(ex.en || '')}"</div>` +
-        (ex.cn ? `<div class="ifll-tt-trans">${renderBoldHtml(ex.cn)}</div>` : '')
-      ).join('');
+        '<div class="ifll-tt-example ifll-tt-ai-example">' + htmlEncode(ex.en || '') + '</div>' +
+        (ex.cn ? '<div class="ifll-tt-trans">' + renderBoldHtml(ex.cn) + '</div>' : '')
+        ).join('') + (r.cached ? '<div class="ifll-tt-cached">💾 cached</div>' : '');
     });
 
     const deepBtn = document.getElementById('ifll-deep-btn');

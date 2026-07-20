@@ -167,6 +167,23 @@ const IFLL_STORAGE = (() => {
     return true;
   }
 
+  /* ── AI cache (chrome.storage.local — 10MB, no sync quota impact) ── */
+  async function getAiCache() {
+    const data = await chrome.storage.local.get('aiCache');
+    return data.aiCache || {};
+  }
+
+  async function getAiCacheEntry(en) {
+    const cache = await getAiCache();
+    return cache[en] || null;
+  }
+
+  async function setAiCacheEntry(en, data) {
+    const cache = await getAiCache();
+    cache[en] = data;
+    await chrome.storage.local.set({ aiCache: cache });
+  }
+
   /* ── Stats ── */
   async function trackStat(type, count = 1) {
     const { dailyStats } = await get();
@@ -197,6 +214,7 @@ const IFLL_STORAGE = (() => {
     get, set, getModeForHost, setModeForHost,
     getDailyWords, ensureDailyWords, addPhrase, getPhraseMap,
     markKnown, markUnknown, addToReview, scoreReview, getReviewCount, addUserWord,
+    getAiCache, getAiCacheEntry, setAiCacheEntry,
     trackStat, buildFullBank, DEFAULTS
   };
 })();
