@@ -65,6 +65,41 @@ body {
 .p-toggle input:checked + .p-toggle-track .p-toggle-knob { transform: translateX(20px); }
 .p-toggle-label { font-weight: 500; font-size: 15px; }
 
+/* Mode selector bar */
+.p-mode-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.p-mode-selector {
+  display: flex;
+  gap: 2px;
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 2px;
+}
+.p-mode-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 6px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.p-mode-btn:hover { color: #374151; }
+.p-mode-active {
+  background: #ffffff;
+  color: #2563eb;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  font-weight: 600;
+}
+
 /* Sections */
 .p-section {
   background: #f9fafb;

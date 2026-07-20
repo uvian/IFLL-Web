@@ -12,20 +12,28 @@
 
     <div class="p-header">
       <h1 class="p-logo">IFLL</h1>
-      <span class="p-subtitle">English Injector</span>
+      <span class="p-subtitle">v0.1</span>
     </div>
 
-    <!-- Toggle -->
-    <label class="p-toggle">
-      <input type="checkbox" id="enabled">
-      <span class="p-toggle-track">
-        <span class="p-toggle-knob"></span>
-      </span>
-      <span class="p-toggle-label" id="toggleLabel">已开启</span>
-    </label>
+    <!-- Toggle + Mode -->
+    <div class="p-mode-bar">
+      <label class="p-toggle">
+        <input type="checkbox" id="enabled">
+        <span class="p-toggle-track">
+          <span class="p-toggle-knob"></span>
+        </span>
+        <span class="p-toggle-label" id="toggleLabel">已开启</span>
+      </label>
+      <div class="p-mode-selector" id="modeSelector">
+        <button data-mode="replace" class="p-mode-btn p-mode-active" title="将中文替换为英文">🔄 替换</button>
+        <button data-mode="annotate" class="p-mode-btn" title="英文词下方标注中文释义">✏️ 标注</button>
+        <button data-mode="translate" class="p-mode-btn" title="段落整段对照翻译">📑 对比</button>
+        <button data-mode="off" class="p-mode-btn" title="当前页面不学习">🚫 关闭</button>
+      </div>
+    </div>
 
     <!-- Settings -->
-    <div class="p-section">
+    <div class="p-section" id="replaceSettings">
       <div class="p-row">
         <label class="p-label" for="frequency">替换频率</label>
         <select id="frequency" class="p-select">
@@ -47,9 +55,10 @@
 
     <!-- Stats -->
     <div class="p-section p-stats">
-      <span>内置词库: <strong id="wordCount">0</strong> 词</span>
-      <span>已掌握: <strong id="knownCount">0</strong> 词</span>
-      <span>待复习: <strong id="reviewCount">0</strong> 词</span>
+      <span title="内置词库">📚 <strong id="wordCount">0</strong></span>
+      <span title="已掌握">✅ <strong id="knownCount">0</strong></span>
+      <span title="待复习">📝 <strong id="reviewCount">0</strong></span>
+      <span title="今日学习">📊 <strong id="todayCount">0</strong></span>
     </div>
 
     <!-- Excluded Sites -->

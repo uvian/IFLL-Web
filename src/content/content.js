@@ -3,12 +3,12 @@
  * Entry point: runs on every page
  */
 (async () => {
-  async function showWelcomePrompt() {
+  async function showWelcomePrompt(hostname) {
     return new Promise((resolve) => {
-      const hostname = window.location.hostname;
       const cached = sessionStorage.getItem('ifll_decision_' + hostname);
-      if (cached === 'accepted') { resolve(true); return; }
-      if (cached === 'rejected') { resolve(false); return; }
+      if (cached === 'accepted') { resolve('replace'); return; }
+      if (cached === 'rejected') { resolve('off'); return; }
+      if (cached && ['replace','annotate','translate'].includes(cached)) { resolve(cached); return; }
 
       const bar = document.createElement('div');
       bar.className = 'ifll-prompt';
@@ -16,12 +16,14 @@
         <div class="ifll-prompt-body">
           <span class="ifll-prompt-icon">📘</span>
           <span class="ifll-prompt-text">
-            <span class="ifll-prompt-title">当前页面是否进行沉浸式外语学习？</span>
-            <span class="ifll-prompt-desc">点击「开始」将把中文词汇替换为英文</span>
+            <span class="ifll-prompt-title">当前页面的学习方式？</span>
+            <span class="ifll-prompt-desc">选择一种模式开始学习</span>
           </span>
           <span class="ifll-prompt-actions">
-            <button class="ifll-prompt-btn ifll-prompt-btn-yes">开始</button>
-            <button class="ifll-prompt-btn ifll-prompt-btn-no">跳过</button>
+            <button data-mode="replace" class="ifll-prompt-btn ifll-prompt-btn-primary">🔄 替换</button>
+            <button data-mode="annotate" class="ifll-prompt-btn ifll-prompt-btn-secondary">✏️ 标注</button>
+            <button data-mode="translate" class="ifll-prompt-btn ifll-prompt-btn-secondary">📑 翻译</button>
+            <button data-mode="off" class="ifll-prompt-btn ifll-prompt-btn-skip">跳过</button>
           </span>
         </div>
         <div class="ifll-prompt-progress"><div class="ifll-prompt-bar"></div></div>`;
@@ -29,23 +31,30 @@
       requestAnimationFrame(() => bar.classList.add('ifll-prompt-show'));
       const pbar = bar.querySelector('.ifll-prompt-bar');
       requestAnimationFrame(() => { pbar.style.transition = 'width 8s linear'; pbar.style.width = '0%'; });
-      const timer = setTimeout(() => dismiss(false), 8000);
-      function dismiss(accepted) {
+      const timer = setTimeout(() => dismiss('replace'), 8000);
+
+      function dismiss(mode) {
         clearTimeout(timer);
         bar.classList.remove('ifll-prompt-show');
         bar.classList.add('ifll-prompt-hide');
         setTimeout(async () => {
           bar.remove();
-          sessionStorage.setItem('ifll_decision_' + hostname, accepted ? 'accepted' : 'rejected');
-          if (!accepted) {
+          sessionStorage.setItem('ifll_decision_' + hostname, mode);
+          if (mode === 'off') {
             const { excludedSites = [] } = await IFLL_STORAGE.get();
-            if (!excludedSites.includes(hostname)) { excludedSites.push(hostname); await IFLL_STORAGE.set({ excludedSites }); }
+            if (!excludedSites.includes(hostname)) {
+              excludedSites.push(hostname);
+              await IFLL_STORAGE.set({ excludedSites });
+            }
+          } else {
+            await IFLL_STORAGE.setModeForHost(hostname, mode);
           }
-          resolve(accepted);
+          resolve(mode);
         }, 400);
       }
-      bar.querySelector('.ifll-prompt-btn-yes').addEventListener('click', () => dismiss(true));
-      bar.querySelector('.ifll-prompt-btn-no').addEventListener('click', () => dismiss(false));
+      bar.querySelectorAll('.ifll-prompt-btn').forEach(btn => {
+        btn.addEventListener('click', () => dismiss(btn.dataset.mode));
+      });
     });
   }
 
@@ -54,10 +63,13 @@
     if (!settings.enabled) return;
     const hostname = window.location.hostname;
     if (settings.excludedSites && settings.excludedSites.some(s => hostname.includes(s))) return;
-    const accepted = await showWelcomePrompt();
-    if (!accepted) return;
-    const delay = document.readyState === 'complete' ? 100 : 500;
-    setTimeout(() => { IFLL_INJECTOR.init(); }, delay);
+    /* Check stored mode */
+    let mode = await IFLL_STORAGE.getModeForHost(hostname);
+    if (mode === 'off') return;
+    /* Show prompt if on first visit */
+    mode = await showWelcomePrompt(hostname);
+    if (mode === 'off') return;
+    IFLL_INJECTOR.start(mode);
   }
 
   chrome.runtime.onMessage.addListener((message) => {
@@ -70,6 +82,12 @@
       }
       IFLL_INJECTOR.destroy();
       IFLL_INJECTOR.init();
+    }
+    if (message.type === 'IFLL_MODE_CHANGED') {
+      IFLL_INJECTOR.destroy();
+      const mode = message.mode;
+      if (mode === 'off') return;
+      IFLL_INJECTOR.start(mode);
     }
   });
 

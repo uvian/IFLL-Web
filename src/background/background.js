@@ -15,6 +15,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handlers = {
     IFLL_AI_EXAMPLES: () => handleAiExamples(message.en, message.zh, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_AI_DEEP_ANALYSIS: () => handleDeepAnalysis(message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
+    IFLL_AI_TRANSLATE: () => handleAiTranslate(message.text, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_TEST_API: () => testApiConnection(message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_LIST_MODELS: () => listModels(message.apiKey, message.apiEndpoint)
   };
@@ -106,6 +107,35 @@ async function handleDeepAnalysis(en, zh, def, apiKey, apiEndpoint, apiModel) {
     const parsed = extractJson(content);
     if (!parsed) return { error: 'cannot parse AI response' };
     return parsed;
+  } catch (err) { return { error: err.message }; }
+}
+
+/* ---- Translate text (for translation mode) ---- */
+async function handleAiTranslate(text, apiKey, apiEndpoint, apiModel) {
+  if (!apiKey) return { error: 'no api key' };
+  const langPair = /[\u4e00-\u9fff]/.test(text[0]) ? 'Chinese to English' : 'English to Chinese';
+  try {
+    const resp = await apiFetch(apiEndpoint, '/chat/completions', {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + apiKey
+    }, {
+      model: apiModel || 'deepseek-chat',
+      messages: [
+        { role: 'system', content: `Translate the following ${langPair} text naturally. Return ONLY valid JSON: {"translation":"your translation here"}` },
+        { role: 'user', content: text }
+      ],
+      temperature: 0.3, max_tokens: 1024
+    });
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => 'unknown');
+      return { error: `HTTP ${resp.status}: ${errText.substring(0, 150)}` };
+    }
+    const data = await resp.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return { error: 'empty response' };
+    const parsed = extractJson(content);
+    if (!parsed || !parsed.translation) return { error: 'cannot parse translation' };
+    return { success: true, translation: parsed.translation };
   } catch (err) { return { error: err.message }; }
 }
 

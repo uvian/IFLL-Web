@@ -8,6 +8,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const level = document.getElementById('level');
   const wordCount = document.getElementById('wordCount');
   const knownCount = document.getElementById('knownCount');
+  const reviewCountEl = document.getElementById('reviewCount');
+  const todayCount = document.getElementById('todayCount');
   const apiKey = document.getElementById('apiKey');
   const apiEndpoint = document.getElementById('apiEndpoint');
   const apiEndpointCustom = document.getElementById('apiEndpointCustom');
@@ -19,6 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const refreshBtn = document.getElementById('refreshPage');
   const excludedList = document.getElementById('excludedList');
   const clearExcluded = document.getElementById('clearExcluded');
+  const modeSelector = document.getElementById('modeSelector');
 
   const settings = await IFLL_STORAGE.get();
   enabled.checked = settings.enabled;
@@ -28,10 +31,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   apiKey.value = settings.apiKey || '';
   wordCount.textContent = WORD_BANK.length;
   knownCount.textContent = (settings.knownWords || []).length;
-  const reviewCountEl = document.getElementById('reviewCount');
   if (reviewCountEl) {
     const due = (settings.reviewQueue || []).filter(w => w.nextReview <= Date.now()).length;
     reviewCountEl.textContent = due;
+  }
+  if (todayCount) {
+    const ds = settings.dailyStats || {};
+    const today = new Date().toISOString().slice(0, 10);
+    if (ds.date === today) {
+      todayCount.textContent = (ds.replaceCount || 0) + (ds.annotateCount || 0);
+    } else {
+      todayCount.textContent = '0';
+    }
   }
 
   /* Restore API endpoint + model */
@@ -44,11 +55,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     apiEndpointCustomRow.style.display = 'flex';
   }
   if (settings.apiModel) {
-    // Check if it's in the dropdown already
     if ([...apiModel.options].some(o => o.value === settings.apiModel)) {
       apiModel.value = settings.apiModel;
     } else {
-      // Add a custom option
       const opt = document.createElement('option');
       opt.value = settings.apiModel;
       opt.textContent = settings.apiModel;
@@ -57,17 +66,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  /* ── Mode selector ── */
+  async function updateModeUI() {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tabs[0]) return;
+    const hostname = new URL(tabs[0].url).hostname;
+    const mode = await IFLL_STORAGE.getModeForHost(hostname);
+    modeSelector.querySelectorAll('.p-mode-btn').forEach(btn => {
+      btn.classList.toggle('p-mode-active', btn.dataset.mode === mode);
+    });
+  }
+  updateModeUI();
+
+  modeSelector.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.p-mode-btn');
+    if (!btn) return;
+    const mode = btn.dataset.mode;
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tabs[0]) {
+      const hostname = new URL(tabs[0].url).hostname;
+      await IFLL_STORAGE.setModeForHost(hostname, mode);
+      modeSelector.querySelectorAll('.p-mode-btn').forEach(b => b.classList.toggle('p-mode-active', b.dataset.mode === mode));
+      chrome.tabs.sendMessage(tabs[0].id, { type: 'IFLL_MODE_CHANGED', mode, hostname }).catch(() => {});
+    }
+  });
+
   /* ── Voice settings ── */
   const voiceSelect = document.getElementById('voiceSelect');
   if (voiceSelect && 'speechSynthesis' in window) {
     function populateVoices() {
       const voices = window.speechSynthesis.getVoices();
-      const enVoices = voices.filter(v => v.lang.startsWith('en'));
       const current = voiceSelect.value;
       voiceSelect.innerHTML = '<option value="">默认 (浏览器自动选择)</option>';
-      const groups = {};
-      for (const v of enVoices) {
-        const label = `${v.name} (${v.lang})`;
+      for (const v of voices) {
+        if (!v.lang.startsWith('en')) continue;
         const opt = document.createElement('option');
         opt.value = v.name;
         opt.textContent = `${v.name} — ${v.lang}`;
@@ -86,7 +118,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     apiEndpointCustomRow.style.display = show ? 'flex' : 'none';
   });
 
-  /* ── Save API settings ── */
+  /* ── Save API ── */
   async function getEffectiveEndpoint() {
     return apiEndpoint.value === '__custom__' ? apiEndpointCustom.value.trim() : apiEndpoint.value;
   }
@@ -101,7 +133,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => { saveApi.textContent = '保存'; }, 2000);
   });
 
-  /* ── Test API connection ── */
+  /* ── Test API ── */
   testApi.addEventListener('click', async () => {
     const key = apiKey.value.trim();
     if (!key) { testApi.textContent = '⚠️ 请先填入 API Key'; return; }
@@ -110,7 +142,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const result = await chrome.runtime.sendMessage({
         type: 'IFLL_TEST_API',
-        apiKey: key,
+        apiKey: apiKey.value.trim(),
         apiEndpoint: await getEffectiveEndpoint(),
         apiModel: apiModel.value
       });
@@ -126,7 +158,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => { testApi.textContent = '🔌 测试连接'; }, 3500);
   });
 
-  /* ── Refresh model list ── */
+  /* ── Refresh models ── */
   let refreshing = false;
   refreshModels.addEventListener('click', async () => {
     const key = apiKey.value.trim();
@@ -137,7 +169,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const result = await chrome.runtime.sendMessage({
         type: 'IFLL_LIST_MODELS',
-        apiKey: key,
+        apiKey: apiKey.value.trim(),
         apiEndpoint: await getEffectiveEndpoint()
       });
       if (result && result.models && result.models.length) {
@@ -161,7 +193,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => { refreshModels.textContent = '↻'; }, 3000);
   });
 
-  /* ── Excluded sites rendering ── */
+  /* ── Excluded sites ── */
   renderExcludedSites(settings.excludedSites || []);
   const excludedCountEl = document.getElementById('excludedCount');
   if (excludedCountEl) excludedCountEl.textContent = (settings.excludedSites || []).length;
@@ -206,7 +238,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   frequency.addEventListener('change', () => savePartial({ frequency: frequency.value }));
   level.addEventListener('change', () => savePartial({ level: level.value }));
 
-  /* ── Exclude current page ── */
+  /* ── Exclude current ── */
   const excludeCurrent = document.getElementById('excludeCurrent');
   if (excludeCurrent) {
     excludeCurrent.addEventListener('click', async () => {
@@ -259,7 +291,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
-      const allowed = ['enabled','frequency','level','knownWords','excludedSites','apiKey','apiEndpoint','apiModel'];
+      const allowed = ['enabled','frequency','level','knownWords','excludedSites','apiKey','apiEndpoint','apiModel','siteModes','defaultMode'];
       const clean = {};
       for (const k of allowed) if (k in data) clean[k] = data[k];
       await chrome.storage.sync.set(clean);
