@@ -274,6 +274,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   /* ── Refresh page ── */
   refreshBtn.addEventListener('click', () => { chrome.tabs.reload(); });
 
+  /* ── PDF Viewer ── */
+  const openPdfBtn = document.getElementById('openPdfViewer');
+  if (openPdfBtn) openPdfBtn.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ type: 'IFLL_OPEN_PDF', url: '' });
+  });
+
   /* ── Import / Export ── */
   const exportBtn = document.getElementById('exportConfig');
   const importBtn = document.getElementById('importConfig');

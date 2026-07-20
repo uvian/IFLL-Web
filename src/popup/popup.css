@@ -1,10 +1,10 @@
 /*
- * IFLL — Popup styles
+ * IFLL — Popup styles (v2 — polished)
  */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  width: 320px;
+  width: 340px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   font-size: 14px;
   color: #1f2937;
@@ -18,7 +18,9 @@ body {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
 }
 .p-logo {
   font-size: 22px;
@@ -27,17 +29,23 @@ body {
   letter-spacing: -0.5px;
 }
 .p-subtitle {
-  font-size: 12px;
+  font-size: 11px;
   color: #9ca3af;
   font-weight: 500;
+  margin-left: auto;
 }
 
-/* Toggle */
+/* Toggle + Mode bar */
+.p-mode-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
 .p-toggle {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 16px;
   cursor: pointer;
 }
 .p-toggle input[type="checkbox"] { display: none; }
@@ -49,6 +57,7 @@ body {
   border-radius: 12px;
   position: relative;
   transition: background 0.2s;
+  flex-shrink: 0;
 }
 .p-toggle input:checked + .p-toggle-track { background: #2563eb; }
 .p-toggle-knob {
@@ -63,40 +72,35 @@ body {
   box-shadow: 0 1px 3px rgba(0,0,0,0.15);
 }
 .p-toggle input:checked + .p-toggle-track .p-toggle-knob { transform: translateX(20px); }
-.p-toggle-label { font-weight: 500; font-size: 15px; }
+.p-toggle-label { font-weight: 600; font-size: 14px; }
 
-/* Mode selector bar */
-.p-mode-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
-}
+/* Mode selector */
 .p-mode-selector {
-  display: flex;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
   background: #f3f4f6;
-  border-radius: 8px;
-  padding: 2px;
+  border-radius: 10px;
+  padding: 3px;
 }
 .p-mode-btn {
-  flex: 1;
   border: none;
   background: transparent;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
-  padding: 6px 4px;
-  border-radius: 6px;
+  padding: 7px 4px;
+  border-radius: 7px;
   cursor: pointer;
   color: #6b7280;
   transition: all 0.15s;
   white-space: nowrap;
+  text-align: center;
 }
 .p-mode-btn:hover { color: #374151; }
 .p-mode-active {
   background: #ffffff;
-  color: #2563eb;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  color: #1d4ed8;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 0 0 1px rgba(37,99,235,0.1);
   font-weight: 600;
 }
 
@@ -105,19 +109,21 @@ body {
   background: #f9fafb;
   border-radius: 10px;
   padding: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 .p-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 9px;
 }
 .p-row:last-child { margin-bottom: 0; }
-.p-row-end { justify-content: flex-end; }
 .p-label {
   font-weight: 500;
-  font-size: 14px;
+  font-size: 13px;
+  color: #4b5563;
+  flex-shrink: 0;
 }
 .p-row-grow {
   display: flex;
@@ -126,22 +132,7 @@ body {
   align-items: center;
 }
 .p-row-grow select { flex: 1; }
-.p-btn-icon {
-  width: 28px;
-  height: 28px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: #f9fafb;
-  color: #6b7280;
-  font-size: 16px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: background 0.12s;
-}
-.p-btn-icon:hover { background: #e5e7eb; color: #374151; }
+
 .p-select {
   padding: 6px 10px;
   border: 1px solid #d1d5db;
@@ -150,24 +141,33 @@ body {
   background: white;
   cursor: pointer;
   outline: none;
+  min-width: 0;
+  flex-shrink: 1;
 }
 .p-select:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 2px rgba(37,99,235,0.15);
 }
+.p-select-wide { min-width: 160px; }
 
 /* Stats */
 .p-stats {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  font-size: 12px;
   color: #6b7280;
 }
-.p-stats strong { color: #1f2937; }
+.p-stats span {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.p-stats strong { color: #1f2937; font-size: 13px; }
 
 /* API section */
 .p-api {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   font-size: 13px;
 }
 .p-api summary {
@@ -175,69 +175,31 @@ body {
   color: #6b7280;
   font-weight: 500;
   padding: 4px 0;
+  user-select: none;
+  transition: color 0.12s;
 }
+.p-api summary:hover { color: #374151; }
 .p-api-hint {
   color: #9ca3af;
-  font-size: 12px;
-  margin: 8px 0;
+  font-size: 11px;
+  margin: 6px 0;
   line-height: 1.4;
 }
 .p-input {
   width: 100%;
-  padding: 8px 10px;
+  padding: 7px 10px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 12px;
   outline: none;
   font-family: monospace;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  transition: border-color 0.15s;
 }
 .p-input:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 2px rgba(37,99,235,0.15);
 }
-
-/* Buttons */
-.p-btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.p-btn-sm { padding: 6px 12px; }
-.p-btn { background: #2563eb; color: white; }
-.p-btn:hover { background: #1d4ed8; }
-.p-btn-outline {
-  background: transparent;
-  color: #6b7280;
-  border: 1px solid #d1d5db;
-}
-.p-btn-outline:hover {
-  background: #f3f4f6;
-  color: #1f2937;
-}
-.p-btn-outline-sm {
-  background: transparent;
-  color: #9ca3af;
-  border: 1px solid #e5e7eb;
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-}
-.p-btn-outline-sm:hover {
-  background: #f3f4f6;
-  color: #374151;
-}
-.p-btn-danger {
-  background: #dc2626;
-  color: white;
-}
-.p-btn-danger:hover { background: #b91c1c; }
 
 /* Excluded sites */
 .p-excluded-list {
@@ -247,10 +209,7 @@ body {
   margin-bottom: 8px;
   min-height: 20px;
 }
-.p-empty {
-  font-size: 12px;
-  color: #9ca3af;
-}
+.p-empty { font-size: 12px; color: #9ca3af; }
 .p-excluded-item {
   display: inline-flex;
   align-items: center;
@@ -269,15 +228,107 @@ body {
   font-size: 12px;
   padding: 0 2px;
   line-height: 1;
+  opacity: 0.6;
+  transition: opacity 0.12s;
 }
+.p-excluded-remove:hover { opacity: 1; }
+
+/* Buttons */
+.p-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.p-btn:active { transform: scale(0.97); }
+.p-btn-sm { padding: 5px 10px; font-size: 12px; }
+.p-btn { background: #2563eb; color: white; }
+.p-btn:hover { background: #1d4ed8; }
+.p-btn-outline {
+  background: transparent;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+.p-btn-outline:hover { background: #f3f4f6; color: #1f2937; }
+.p-btn-outline-sm {
+  background: transparent;
+  color: #9ca3af;
+  border: 1px solid #e5e7eb;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.p-btn-outline-sm:hover { background: #f3f4f6; color: #374151; }
+.p-btn-danger {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  font-size: 11px;
+}
+.p-btn-danger:hover { background: #fecaca; }
+
+/* Button icon */
+.p-btn-icon {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+.p-btn-icon:hover { background: #e5e7eb; color: #374151; }
+
+/* PDF link button */
+.p-btn-pdf {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s;
+  white-space: nowrap;
+}
+.p-btn-pdf:hover { background: #dcfce7; }
 
 /* Footer */
 .p-footer {
   display: flex;
   justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
 }
 .p-footer-io {
   justify-content: center;
   gap: 6px;
   margin-top: 6px;
+}
+
+/* Review button */
+.p-review-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  padding: 0 5px;
+  margin-left: 2px;
 }

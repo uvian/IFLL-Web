@@ -20,7 +20,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     IFLL_TEST_API: () => testApiConnection(message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_LIST_MODELS: () => listModels(message.apiKey, message.apiEndpoint),
     IFLL_OPEN_PDF: () => {
-      chrome.tabs.create({ url: chrome.runtime.getURL(`src/pdf/pdf.html?url=${encodeURIComponent(message.url)}`) });
+      const dest = message.url ? `src/pdf/pdf.html?url=${encodeURIComponent(message.url)}` : 'src/pdf/pdf.html';
+      chrome.tabs.create({ url: chrome.runtime.getURL(dest) });
       return Promise.resolve({});
     }
   };
