@@ -92,10 +92,31 @@
   <!-- API settings -->
   <details class="p-api">
     <summary>API 设置</summary>
-    <p class="p-api-hint">配置 DeepSeek / OpenAI 兼容 API。仅用于主动触发的 AI 功能。</p>
-    <input id="apiKey" class="p-input" type="password" placeholder="API Key (sk-...)">
-    <input id="apiEndpoint" class="p-input" type="text" placeholder="API 地址 (默认 DeepSeek)" value="https://api.deepseek.com">
-    <input id="apiModel" class="p-input" type="text" placeholder="模型名称 (例: deepseek-chat)">
+    <p class="p-api-hint">配置 AI API 后可点击替换词获取深度解析与例句。仅用于主动触发的 AI 功能。</p>
+    <div class="p-row">
+      <label class="p-label" for="apiEndpoint">API 地址</label>
+      <select id="apiEndpoint" class="p-select">
+        <option value="https://api.deepseek.com">DeepSeek</option>
+        <option value="https://opencode.ai/zen/go/v1">OpenCode Go</option>
+        <option value="https://api.openai.com/v1">OpenAI</option>
+        <option value="https://openrouter.ai/api/v1">OpenRouter</option>
+        <option value="__custom__">自定义</option>
+      </select>
+    </div>
+    <div id="apiEndpointCustomRow" style="display:none">
+      <input type="text" id="apiEndpointCustom" class="p-input" placeholder="https://your-api.com/v1">
+    </div>
+    <div class="p-row">
+      <label class="p-label" for="apiModel">模型名称</label>
+      <select id="apiModel" class="p-select" style="flex:1">
+        <option value="deepseek-chat">deepseek-chat</option>
+      </select>
+      <button id="refreshModels" class="p-btn p-btn-sm" style="flex-shrink:0">刷新</button>
+    </div>
+    <div class="p-row">
+      <label class="p-label" for="apiKey">API Key</label>
+      <input type="password" id="apiKey" class="p-input" placeholder="sk-...">
+    </div>
     <div class="p-row">
       <button id="testApi" class="p-btn p-btn-sm">测试连接</button>
       <button id="saveApi" class="p-btn p-btn-sm p-btn-primary">保存</button>
