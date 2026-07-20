@@ -444,3 +444,77 @@
   transform: translateY(-2px);
   box-shadow: 0 6px 24px rgba(37,99,235,0.4);
 }
+
+/* ── Review buttons (color-coded) ── */
+.ifll-btn-review {
+  flex: 1;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 4px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.ifll-btn-r4 { background: #f0fdf4; color: #166534; }
+.ifll-btn-r4:hover { background: #dcfce7; }
+.ifll-btn-r3 { background: #f0f9ff; color: #075985; }
+.ifll-btn-r3:hover { background: #e0f2fe; }
+.ifll-btn-r2 { background: #fefce8; color: #854d0e; }
+.ifll-btn-r2:hover { background: #fef08a; }
+.ifll-btn-r1 { background: #fef2f2; color: #991b1b; }
+.ifll-btn-r1:hover { background: #fecaca; }
+
+/* ── Tooltip reveal animation ── */
+.ifll-tooltip {
+  animation: ifll-fade-up 0.18s ease-out;
+}
+@keyframes ifll-fade-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── AI button loading ── */
+.ifll-btn-ai {
+  background: #f3f4f6;
+  color: #6366f1;
+  border: 1px dashed #c7d2fe;
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.ifll-btn-ai:hover { background: #eef2ff; border-color: #818cf8; }
+.ifll-btn-ai:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  animation: ifll-pulse 1s ease-in-out infinite;
+}
+@keyframes ifll-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 0.4; }
+}
+
+/* ── Scrollable deep analysis ── */
+.ifll-tt-deep {
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+/* ── Review count badge ── */
+.ifll-review-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  padding: 0 5px;
+  margin-left: 2px;
+}
