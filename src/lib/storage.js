@@ -18,6 +18,7 @@ const IFLL_STORAGE = (() => {
     reviewQueue: [],
     userWords: [],
     phraseMap: {},               // { "做出决定": "make a decision", ... }
+    tooltipTheme: 'auto',        // 'auto' | 'light' | 'dark'
     dailyWordCount: 15,          // new words per day (user-settable)
     dailyWords: [],              // today's selected words: [{ zh, en, addedAt }]
     dailyWordDate: '',           // ISO date when daily words were selected

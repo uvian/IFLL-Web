@@ -172,6 +172,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   dailyCount.addEventListener('change', () => savePartial({ dailyWordCount: parseInt(dailyCount.value) || 15 }));
 
+  /* Theme toggle */
+  const tooltipTheme = document.getElementById('tooltipTheme');
+  if (tooltipTheme) {
+    tooltipTheme.value = settings.tooltipTheme || 'auto';
+    tooltipTheme.addEventListener('change', () => savePartial({ tooltipTheme: tooltipTheme.value }));
+  }
+
   /* ── Save API ── */
   saveApiBtn.addEventListener('click', async () => {
     await IFLL_STORAGE.set({

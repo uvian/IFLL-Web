@@ -12,6 +12,29 @@ const IFLL_INJECTOR = (() => {
   ]);
 
 
+  /* ── Theme detection ── */
+  async function applyTooltipTheme(el) {
+    const s = await IFLL_STORAGE.get();
+    let theme = s.tooltipTheme || 'auto';
+    if (theme === 'auto') {
+      /* Check page background darkness */
+      const bg = getComputedStyle(document.body).backgroundColor;
+      const isPageDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        || document.documentElement.getAttribute('data-theme') === 'dark'
+        || document.documentElement.classList.contains('dark')
+        || isDarkColor(bg);
+      theme = isPageDark ? 'dark' : 'light';
+    }
+    el.classList.toggle('ifll-dark', theme === 'dark');
+  }
+
+  function isDarkColor(rgb) {
+    const m = rgb.match(/[\d.]+/g);
+    if (!m || m.length < 3) return false;
+    const [r, g, b] = m.map(Number);
+    return (r * 299 + g * 587 + b * 114) / 1000 < 128;
+  }
+
   /* ---- Config ---- */
   function getReplaceCount(frequency, textLen) {
     const ratios = { low: 0.001, medium: 0.003, high: 0.008 };
@@ -559,6 +582,8 @@ const IFLL_INJECTOR = (() => {
       tooltipEl = document.createElement('div');
       tooltipEl.className = 'ifll-tooltip';
       document.body.appendChild(tooltipEl);
+      /* Auto-detect page theme for tooltip */
+      applyTooltipTheme(tooltipEl);
       tooltipEl.addEventListener('click', async (ev) => {
         const btn = ev.target.closest('button');
         if (!btn || btn.disabled) return;

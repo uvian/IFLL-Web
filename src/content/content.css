@@ -538,3 +538,47 @@
   border-radius: 2px;
 }
 .ifll-tt-cached { font-size: 10px; color: #9ca3af; margin-top: 4px; font-style: italic; }
+
+/* ── Dark theme tooltip ── */
+.ifll-tooltip.ifll-dark {
+  background: #1E1E22;
+  color: #E8E4DF;
+  border-color: #3A3632;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.2);
+}
+.ifll-tooltip.ifll-dark .ifll-tt-en { color: #F0ECE6; }
+.ifll-tooltip.ifll-dark .ifll-tt-meta { color: #A09A94; }
+.ifll-tooltip.ifll-dark .ifll-tt-pos { color: #7B9FD4; }
+.ifll-tooltip.ifll-dark .ifll-tt-ipa { color: #8A8580; }
+.ifll-tooltip.ifll-dark .ifll-tt-def { color: #E8E4DF; }
+.ifll-tooltip.ifll-dark .ifll-tt-divider { background: #3A3632; }
+.ifll-tooltip.ifll-dark .ifll-tt-label { color: #8A8580; }
+.ifll-tooltip.ifll-dark .ifll-tt-example { color: #E8E4DF; }
+.ifll-tooltip.ifll-dark .ifll-tt-ai-example { border-left-color: #3A4A6B; }
+.ifll-tooltip.ifll-dark .ifll-tt-trans { color: #A09A94; }
+.ifll-tooltip.ifll-dark .ifll-tt-deep-row { color: #E8E4DF; }
+.ifll-tooltip.ifll-dark .ifll-tt-deep-tag { background: #2A2724; color: #A09A94; }
+.ifll-tooltip.ifll-dark .ifll-tt-deep-usage { color: #A09A94; }
+.ifll-tooltip.ifll-dark .ifll-tt-deep-empty { color: #6B6560; }
+.ifll-tooltip.ifll-dark .ifll-tt-actions { border-top-color: #3A3632; }
+.ifll-tooltip.ifll-dark .ifll-tt-level { background: #2A2724; color: #8A8580; }
+.ifll-tooltip.ifll-dark .ifll-tt-cached { color: #6B6560; }
+.ifll-tooltip.ifll-dark .ifll-btn-known { background: #1E1E22; border-color: #6DBF93; color: #6DBF93; }
+.ifll-tooltip.ifll-dark .ifll-btn-known:hover { background: #1A2F24; }
+.ifll-tooltip.ifll-dark .ifll-btn-unknown { background: #1E1E22; border-color: #3A3632; color: #A09A94; }
+.ifll-tooltip.ifll-dark .ifll-btn-unknown:hover { background: #2A2724; }
+.ifll-tooltip.ifll-dark .ifll-btn-exclude { background: #1E1E22; border-color: #3A3632; color: #8A8580; }
+.ifll-tooltip.ifll-dark .ifll-btn-exclude:hover { background: #2A1A1A; color: #E88B8B; border-color: #4A3030; }
+.ifll-tooltip.ifll-dark .ifll-btn-addword { border-color: #4A4540; color: #8A8580; }
+.ifll-tooltip.ifll-dark .ifll-btn-addword:hover { border-color: #7B9FD4; color: #7B9FD4; }
+.ifll-tooltip.ifll-dark .ifll-btn-ai { background: #1E1E22; border-color: #3A4A6B; color: #7B9FD4; }
+.ifll-tooltip.ifll-dark .ifll-btn-ai:hover { background: #22283A; }
+.ifll-tooltip.ifll-dark .ifll-btn-review { background: #1E1E22; border-color: #3A3632; color: #A09A94; }
+.ifll-tooltip.ifll-dark .ifll-btn-r4 { border-color: #4A6A55; color: #6DBF93; }
+.ifll-tooltip.ifll-dark .ifll-btn-r4:hover { background: #1A2A1F; }
+.ifll-tooltip.ifll-dark .ifll-btn-r3 { border-color: #3A4A6B; color: #7B9FD4; }
+.ifll-tooltip.ifll-dark .ifll-btn-r3:hover { background: #1A2030; }
+.ifll-tooltip.ifll-dark .ifll-btn-r2 { border-color: #4A4030; color: #D4A84B; }
+.ifll-tooltip.ifll-dark .ifll-btn-r2:hover { background: #2A2418; }
+.ifll-tooltip.ifll-dark .ifll-btn-r1 { border-color: #4A2828; color: #E88B8B; }
+.ifll-tooltip.ifll-dark .ifll-btn-r1:hover { background: #2A1A1A; }
