@@ -225,7 +225,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (result?.models?.length) {
         apiModel.innerHTML = '';
         for (const m of result.models) {
-          apiModel.innerHTML += `<option value="${m.id}">${m.id}</option>`;
+          apiModel.innerHTML += `<option value="${m}">${m}</option>`;
         }
         refreshModels.textContent = `已刷新`;
       } else {

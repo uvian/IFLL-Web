@@ -115,9 +115,11 @@ const IFLL_STORAGE = (() => {
   /* ── Review ── */
   async function markKnown(zh) {
     const { knownWords, reviewQueue } = await get();
-    if (!knownWords.includes(zh)) { knownWords.push(zh); await set({ knownWords }); }
+    if (knownWords.includes(zh) && !reviewQueue.some(w => w.zh === zh)) return;
+    if (!knownWords.includes(zh)) knownWords.push(zh);
     const filtered = reviewQueue.filter(w => w.zh !== zh);
-    if (filtered.length !== reviewQueue.length) await set({ reviewQueue: filtered });
+    /* Single set() to avoid race with concurrent popup/content-script writes */
+    await set({ knownWords, reviewQueue: filtered });
   }
 
   async function markUnknown(zh) {

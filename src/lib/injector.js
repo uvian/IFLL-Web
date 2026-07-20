@@ -106,7 +106,7 @@ const IFLL_INJECTOR = (() => {
               pos: entry.pos || 'noun', posCn: entry.pos_cn || '名词',
               examples: entry.examples || (entry.example ? [entry.example] : []),
               examplesCn: entry.examplesCn || (entry.example_cn ? [entry.example_cn] : []),
-              ipa: entry.ipa || '', level: entry.level,
+              ipa: entry.ipa || '', level: entry.level, cat: entry.cat || '',
               idx, end, len: entry.zh.length
             });
           }
