@@ -116,7 +116,15 @@ async function handleDeepAnalysis(en, zh, def, apiKey, apiEndpoint, apiModel) {
     }, {
       model: apiModel || 'deepseek-v4-flash',
       messages: [
-        { role: 'system', content: 'Analyze the given English word and return JSON: {"synonyms":["word1","word2"],"antonyms":["word1"],"collocations":["collocation1","collocation2"],"usage":"brief usage note (1-2 sentences)","examples":[{"en":"example sentence","cn":"translation with **word** bolded"}]}' },
+        { role: 'system', content: `You are an English language expert. Analyze the given word thoroughly. Return ONLY a JSON object in this exact format, with NO markdown fences:
+{
+  "synonyms": ["synonym1", "synonym2", "synonym3"],
+  "antonyms": ["antonym1", "antonym2"],
+  "collocations": ["verb + noun phrase", "adjective + noun phrase", "common expression"],
+  "usage": "A 1-2 sentence note on when/how to use this word naturally",
+  "examples": [{"en": "natural example sentence", "cn": "中文翻译 with **生词** bold"}]
+}
+Provide at least 2 items per array. For common words like "time", "good", "make", provide 3-5 items each.` },
         { role: 'user', content: `Word: "${en}" (${zh}, definition: ${def})` }
       ],
       temperature: 0.5, max_tokens: 1000

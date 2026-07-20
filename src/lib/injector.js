@@ -751,6 +751,10 @@ const IFLL_INJECTOR = (() => {
       if (d.antonyms?.length) h += `<div class="ifll-tt-deep-row"><span class="ifll-tt-deep-tag">反义</span> ${d.antonyms.join(', ')}</div>`;
       if (d.collocations?.length) h += `<div class="ifll-tt-deep-row"><span class="ifll-tt-deep-tag">搭配</span> ${d.collocations.join(', ')}</div>`;
       if (d.usage) h += `<div class="ifll-tt-deep-usage">${htmlEncode(d.usage)}</div>`;
+      if (d.examples?.length) {
+        h += '<div class="ifll-tt-divider"></div><div class="ifll-tt-label">示例</div>';
+        h += d.examples.map(ex => '<div class="ifll-tt-example ifll-tt-ai-example">' + htmlEncode(ex.en || '') + '</div>' + (ex.cn ? '<div class="ifll-tt-trans">' + renderBoldHtml(ex.cn) + '</div>' : '')).join('');
+      }
       const area = document.getElementById('ifll-deep-area');
       if (area) area.innerHTML = (h || '<div class="ifll-tt-deep-empty">暂无数据</div>') + (r.cached ? '<div class="ifll-tt-cached">cached</div>' : '');
     });
