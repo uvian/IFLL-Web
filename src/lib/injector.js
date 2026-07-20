@@ -525,6 +525,8 @@ const IFLL_INJECTOR = (() => {
   async function showTooltip(e) {
     const span = e.target.closest('.ifll-word, .ifll-annotated');
     if (!span) return;
+    /* If the replacement word is inside a link, prevent navigation so the tooltip can display */
+    if (span.closest('a')) { e.preventDefault(); e.stopPropagation(); }
     const rect = span.getBoundingClientRect();
     const en = span.dataset.en, zh = span.dataset.zh;
     const def = htmlEncode(span.dataset.def || en);
