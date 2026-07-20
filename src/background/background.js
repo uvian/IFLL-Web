@@ -178,15 +178,24 @@ async function testApiConnection(apiKey, apiEndpoint, apiModel) {
 /* ---- List models ---- */
 async function listModels(apiKey, apiEndpoint) {
   if (!apiKey) return { error: 'no api key' };
+  /* Built-in model list for known endpoints — no API call needed */
+  const known = {
+    'https://api.deepseek.com': ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-flash', 'deepseek-v4-pro'],
+    'https://opencode.ai/zen/go/v1': ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-reasoner'],
+    'https://api.openai.com/v1': ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+    'https://openrouter.ai/api/v1': ['deepseek/deepseek-v4-flash', 'deepseek/deepseek-v4-pro', 'openai/gpt-4o'],
+  };
+  const base = apiEndpoint.replace(/\/+$/, '');
+  if (known[base]) return { models: known[base] };
+  /* Unknown endpoint — try API /models as fallback */
   try {
     const resp = await apiFetch(apiEndpoint, '/models', {
       'Authorization': 'Bearer ' + apiKey
     });
-    if (!resp.ok) {
-      const errText = await resp.text().catch(() => 'unknown');
-      return { error: `HTTP ${resp.status}: ${errText.substring(0, 120)}` };
-    }
+    if (!resp.ok) return { models: ['deepseek-v4-flash', 'deepseek-v4-pro'] }; // generic fallback
     const data = await resp.json();
     return { models: (data.data || []).map(m => m.id).sort() };
-  } catch (err) { return { error: err.message }; }
+  } catch (_) {
+    return { models: ['deepseek-v4-flash', 'deepseek-v4-pro'] };
+  }
 }
