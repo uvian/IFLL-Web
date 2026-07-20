@@ -178,18 +178,14 @@ async function testApiConnection(apiKey, apiEndpoint, apiModel) {
 /* ---- List models ---- */
 async function listModels(apiKey, apiEndpoint) {
   if (!apiKey) return { error: 'no api key' };
-  /* Built-in presets for endpoints known to lack /models, as zero-fallback */
-  const builtin = {
-    'https://opencode.ai/zen/go/v1': ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-reasoner'],
-  };
-  const base = apiEndpoint.replace(/\/+$/, '');
-  if (builtin[base]) return { models: builtin[base] };
-  /* Try API /models endpoint (works on DeepSeek, OpenAI, OpenRouter) */
   try {
     const resp = await apiFetch(apiEndpoint, '/models', {
       'Authorization': 'Bearer ' + apiKey
     });
-    if (!resp.ok) return { error: `HTTP ${resp.status}` };
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => 'unknown');
+      return { error: `HTTP ${resp.status}: ${errText.substring(0, 120)}` };
+    }
     const data = await resp.json();
     return { models: (data.data || []).map(m => m.id).sort() };
   } catch (err) { return { error: err.message }; }
