@@ -12,7 +12,7 @@ const IFLL_STORAGE = (() => {
     excludedSites: [],
     apiKey: '',
     apiEndpoint: 'https://api.deepseek.com',
-    apiModel: 'deepseek-chat',
+    apiModel: 'deepseek-v4-flash',
     voiceName: '',
     voiceRate: 0.85,
     reviewQueue: [],

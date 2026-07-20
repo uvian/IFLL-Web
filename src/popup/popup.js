@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   dailyCount.value = String(settings.dailyWordCount || 15);
   apiKey.value = settings.apiKey || '';
   // Ensure saved model is in the dropdown
-  const savedModel = settings.apiModel || 'deepseek-chat';
+  const savedModel = settings.apiModel || 'deepseek-v4-flash';
   if (savedModel && !Array.from(apiModel.options).some(o => o.value === savedModel)) {
     const opt = document.createElement('option');
     opt.value = savedModel;

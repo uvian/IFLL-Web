@@ -67,7 +67,7 @@ async function handleAiExamples(en, zh, apiKey, apiEndpoint, apiModel) {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + apiKey
     }, {
-      model: apiModel || 'deepseek-chat',
+      model: apiModel || 'deepseek-v4-flash',
       messages: [
         { role: 'system', content: 'You are a language tutor. Generate 3 natural, everyday English example sentences for the given word. Return ONLY valid JSON: {"examples":[{"en":"sentence","cn":"translation with **word** bolded"}]}' },
         { role: 'user', content: `Word: "${en}" (Chinese: ${zh}). Generate 3 example sentences.` }
@@ -96,7 +96,7 @@ async function handleDeepAnalysis(en, zh, def, apiKey, apiEndpoint, apiModel) {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + apiKey
     }, {
-      model: apiModel || 'deepseek-chat',
+      model: apiModel || 'deepseek-v4-flash',
       messages: [
         { role: 'system', content: 'Analyze the given English word and return JSON: {"synonyms":["word1","word2"],"antonyms":["word1"],"collocations":["collocation1","collocation2"],"usage":"brief usage note (1-2 sentences)","examples":[{"en":"example sentence","cn":"translation with **word** bolded"}]}' },
         { role: 'user', content: `Word: "${en}" (${zh}, definition: ${def})` }
@@ -125,7 +125,7 @@ async function handleAiTranslate(text, apiKey, apiEndpoint, apiModel) {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + apiKey
     }, {
-      model: apiModel || 'deepseek-chat',
+      model: apiModel || 'deepseek-v4-flash',
       messages: [
         { role: 'system', content: `Translate the following ${langPair} text naturally. Return ONLY valid JSON: {"translation":"your translation here"}` },
         { role: 'user', content: text }
@@ -153,7 +153,7 @@ async function testApiConnection(apiKey, apiEndpoint, apiModel) {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + apiKey
     }, {
-      model: apiModel || 'deepseek-chat',
+      model: apiModel || 'deepseek-v4-flash',
       messages: [{ role: 'user', content: 'Say "ok" in one word.' }],
       max_tokens: 5
     });
