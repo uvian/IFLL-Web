@@ -130,7 +130,7 @@ async function handleAiTranslate(text, apiKey, apiEndpoint, apiModel) {
         { role: 'system', content: `Translate the following ${langPair} text naturally. Return ONLY valid JSON: {"translation":"your translation here"}` },
         { role: 'user', content: text }
       ],
-      temperature: 0.3, max_tokens: 1024
+      temperature: 0.3, max_tokens: Math.min(4096, Math.max(1024, Math.round(text.length * 1.2)))
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => 'unknown');

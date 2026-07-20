@@ -62,7 +62,7 @@
     const settings = await IFLL_STORAGE.get();
     if (!settings.enabled) return;
     const hostname = window.location.hostname;
-    if (settings.excludedSites && settings.excludedSites.some(s => hostname.includes(s))) return;
+    if (settings.excludedSites && settings.excludedSites.some(s => hostname === s || hostname.endsWith('.' + s))) return;
     /* Check stored mode */
     let mode = await IFLL_STORAGE.getModeForHost(hostname);
     if (mode === 'off') return;
@@ -76,7 +76,7 @@
     if (message.type === 'IFLL_SETTINGS_CHANGED') {
       if (message.settings.enabled === false) { IFLL_INJECTOR.destroy(); return; }
       if (message.settings.excludedSites) {
-        if (message.settings.excludedSites.some(s => window.location.hostname.includes(s))) {
+        if (message.settings.excludedSites.some(s => window.location.hostname === s || window.location.hostname.endsWith('.' + s))) {
           IFLL_INJECTOR.destroy(); return;
         }
       }
@@ -84,6 +84,7 @@
       IFLL_INJECTOR.init();
     }
     if (message.type === 'IFLL_MODE_CHANGED') {
+      sessionStorage.setItem('ifll_decision_' + window.location.hostname, message.mode);
       IFLL_INJECTOR.destroy();
       const mode = message.mode;
       if (mode === 'off') return;

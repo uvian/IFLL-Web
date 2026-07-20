@@ -209,7 +209,7 @@ const IFLL_INJECTOR = (() => {
 
   function injectAnnotate(settings) {
     const hostname = window.location.hostname;
-    if (settings?.excludedSites?.some(s => hostname.includes(s) || s.includes(hostname))) return;
+    if (settings?.excludedSites?.some(s => hostname === s || hostname.endsWith('.' + s))) return;
     const bank = getEnWordBank();
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
     let node;
@@ -262,7 +262,7 @@ const IFLL_INJECTOR = (() => {
   let translateCache = {};
   function injectTranslate(settings) {
     const hostname = window.location.hostname;
-    if (settings?.excludedSites?.some(s => hostname.includes(s) || s.includes(hostname))) return;
+    if (settings?.excludedSites?.some(s => hostname === s || hostname.endsWith('.' + s))) return;
     if (!settings.apiKey) {
       /* Show hint once if no API key */
       if (!document.querySelector('.ifll-tt-hint')) {
@@ -336,7 +336,7 @@ const IFLL_INJECTOR = (() => {
     if (!settings?.enabled) return;
     const { frequency, level, knownWords, excludedSites } = settings;
     const hostname = window.location.hostname;
-    if (excludedSites?.some(s => hostname.includes(s) || s.includes(hostname))) return;
+    if (excludedSites?.some(s => hostname === s || hostname.endsWith('.' + s))) return;
     const knownSet = new Set(knownWords);
     getAutomaton(settings);
     const scene = detectScene();
@@ -672,9 +672,21 @@ const IFLL_INJECTOR = (() => {
 
   function destroy() {
     stopObserver(); removeTooltip();
-    document.querySelectorAll('.ifll-word, .ifll-replaced, .ifll-annotated, .ifll-trans-panel').forEach(el => {
+    /* Restore original text using dataset.zh for accurate reversal */
+    document.querySelectorAll('.ifll-replaced, .ifll-trans-panel, .ifll-annotated, .ifll-word').forEach(el => {
       if (!el.parentNode) return;
-      const t = document.createTextNode(el.textContent);
+      let txt = '';
+      if (el.classList.contains('ifll-word')) txt = el.dataset.zh || el.textContent;
+      else if (el.classList.contains('ifll-annotated')) txt = el.textContent;
+      else if (el.classList.contains('ifll-trans-panel')) { el.parentNode.removeChild(el); return; }
+      else if (el.classList.contains('ifll-replaced')) {
+        for (const child of el.childNodes) {
+          if (child.nodeType === Node.TEXT_NODE) txt += child.textContent;
+          else if (child.classList?.contains?.('ifll-word')) txt += child.dataset.zh || child.textContent;
+          else txt += child.textContent || '';
+        }
+      } else { txt = el.textContent; }
+      const t = document.createTextNode(txt);
       el.parentNode.replaceChild(t, el);
     });
   }
