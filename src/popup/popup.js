@@ -318,13 +318,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       for (const k of allowed) if (k in data) clean[k] = data[k];
       /* Merge with existing to preserve wordbank-linked data */
       await chrome.storage.sync.set(clean);
-      importBtn.textContent = '✅ 已导入';
+      importBtn.textContent = '已导入';
       /* Reset daily words so new device picks today's batch */
-      importBtn.textContent = '✅ 已导入（刷新中）';
+      importBtn.textContent = '已导入';
       setTimeout(() => { location.reload(); }, 1200);
     } catch (_) {
-      importBtn.textContent = '❌ 文件无效';
-      setTimeout(() => { importBtn.textContent = '📥 导入配置'; }, 2500);
+      importBtn.textContent = '文件无效';
+      setTimeout(() => { importBtn.textContent = '导入配置'; }, 2500);
     }
     importInput.value = '';
   });

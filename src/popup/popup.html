@@ -1,4 +1,4 @@
-<!-- IFLL popup settings -->
+<!-- IFLL popup — literary minimalism -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -8,151 +8,125 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="p-container">
+<div class="p-container">
 
-    <div class="p-header">
-      <h1 class="p-logo">IFLL</h1>
-      <span class="p-subtitle">v0.1</span>
-    </div>
-
-    <!-- Toggle + Mode -->
-    <div class="p-mode-bar">
-      <label class="p-toggle">
-        <input type="checkbox" id="enabled">
-        <span class="p-toggle-track">
-          <span class="p-toggle-knob"></span>
-        </span>
-        <span class="p-toggle-label" id="toggleLabel">已开启</span>
-      </label>
-      <div class="p-mode-selector" id="modeSelector">
-        <button data-mode="replace" class="p-mode-btn p-mode-active" title="将中文替换为英文">🔄 替换</button>
-        <button data-mode="annotate" class="p-mode-btn" title="英文词下方标注中文释义">✏️ 标注</button>
-        <button data-mode="translate" class="p-mode-btn" title="段落整段对照翻译">📑 对比</button>
-        <button data-mode="off" class="p-mode-btn" title="当前页面不学习">🚫 关闭</button>
-      </div>
-    </div>
-
-    <!-- Settings -->
-    <div class="p-section" id="replaceSettings">
-      <div class="p-row">
-        <label class="p-label" for="frequency">替换频率</label>
-        <select id="frequency" class="p-select">
-          <option value="low">低 (偶尔)</option>
-          <option value="medium" selected>中 (适中)</option>
-          <option value="high">高 (密集)</option>
-        </select>
-      </div>
-      <div class="p-row">
-        <label class="p-label" for="level">词汇等级</label>
-        <select id="level" class="p-select">
-          <option value="cet4" selected>CET-4 四级</option>
-          <option value="cet6">CET-6 六级</option>
-          <option value="ielts">IELTS 雅思</option>
-          <option value="graduate">考研</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- Daily word count -->
-    <div class="p-section">
-      <div class="p-row">
-        <label class="p-label" for="dailyCount">每日新词</label>
-        <select id="dailyCount" class="p-select">
-          <option value="5">5 词</option>
-          <option value="10">10 词</option>
-          <option value="15" selected>15 词</option>
-          <option value="20">20 词</option>
-          <option value="30">30 词</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- Stats -->
-    <div class="p-section p-stats">
-      <span title="内置词库">📚 <strong id="wordCount">0</strong></span>
-      <span title="已掌握">✅ <strong id="knownCount">0</strong></span>
-      <span title="待复习">📝 <strong id="reviewCount">0</strong></span>
-      <span title="今日学习">📊 <strong id="todayCount">0</strong></span>
-    </div>
-
-    <!-- Excluded Sites -->
-    <details class="p-api" open>
-      <summary>排除的网站 (<span id="excludedCount">0</span>)</summary>
-      <div id="excludedList" class="p-excluded-list">
-        <span class="p-empty">暂无排除的网站</span>
-      </div>
-      <div class="p-row" style="justify-content:space-between">
-        <button id="excludeCurrent" class="p-btn p-btn-sm p-btn-outline">⛔ 排除当前页面</button>
-        <button id="clearExcluded" class="p-btn p-btn-sm p-btn-danger">清除全部</button>
-      </div>
-    </details>
-
-    <!-- API settings -->
-    <details class="p-api">
-      <summary>AI 增强 (可选)</summary>
-      <p class="p-api-hint">配置 AI API 后可点击替换词生成更多地道例句</p>
-      <div class="p-row">
-        <label class="p-label" for="apiEndpoint">API 地址</label>
-        <select id="apiEndpoint" class="p-select p-select-wide">
-          <option value="https://api.deepseek.com">DeepSeek</option>
-          <option value="https://opencode.ai/zen/go/v1">OpenCode Go</option>
-          <option value="https://api.openai.com/v1">OpenAI</option>
-          <option value="https://openrouter.ai/api/v1">OpenRouter</option>
-          <option value="__custom__">自定义</option>
-        </select>
-      </div>
-      <div id="apiEndpointCustomRow" class="p-row" style="display:none">
-        <input type="text" id="apiEndpointCustom" class="p-input" placeholder="https://your-api.com/v1">
-      </div>
-      <div class="p-row">
-        <label class="p-label" for="apiModel">模型名</label>
-        <div class="p-row-grow">
-          <select id="apiModel" class="p-select p-select-wide">
-            <option value="deepseek-chat">deepseek-chat</option>
-            <option value="deepseek-v4-flash">deepseek-v4-flash</option>
-            <option value="gpt-4o">gpt-4o</option>
-            <option value="gpt-4o-mini">gpt-4o-mini</option>
-            <option value="claude-sonnet-4">claude-sonnet-4</option>
-          </select>
-          <button id="refreshModels" class="p-btn-icon" title="获取最新模型列表">↻</button>
-        </div>
-      </div>
-      <div class="p-row">
-        <label class="p-label" for="apiKey">API Key</label>
-        <input type="password" id="apiKey" class="p-input" placeholder="sk-...">
-      </div>
-      <div class="p-row" style="justify-content:space-between">
-        <button id="testApi" class="p-btn p-btn-sm p-btn-outline">🔌 测试连接</button>
-        <button id="saveApi" class="p-btn p-btn-sm">保存</button>
-      </div>
-    </details>
-
-    <!-- Pronunciation settings -->
-    <details class="p-api">
-      <summary>发音设置</summary>
-      <p class="p-api-hint">选择朗读单词的发音风格（点击 🔊 按钮试听）</p>
-      <div class="p-row">
-        <label class="p-label" for="voiceSelect">发音</label>
-        <select id="voiceSelect" class="p-select p-select-wide">
-          <option value="">默认 (浏览器自动选择)</option>
-        </select>
-      </div>
-    </details>
-
-    <!-- Footer -->
-    <div class="p-footer">
-      <button id="refreshPage" class="p-btn p-btn-outline">刷新当前页</button>
-      <button id="openPdfViewer" class="p-btn-pdf">📄 PDF 翻译</button>
-    </div>
-    <div class="p-footer p-footer-io">
-      <button id="exportConfig" class="p-btn p-btn-outline-sm">📤 导出配置</button>
-      <button id="importConfig" class="p-btn p-btn-outline-sm">📥 导入配置</button>
-    </div>
-    <input type="file" id="importFileInput" accept=".json" style="display:none">
-
+  <!-- Header -->
+  <div class="p-header">
+    <span class="p-logo">IFLL</span>
+    <span class="p-subtitle">Immersive Learning</span>
   </div>
-  <script src="../lib/storage.js"></script>
-  <script src="../lib/wordbank.js"></script>
-  <script src="popup.js"></script>
+
+  <!-- Toggle -->
+  <div class="p-toggle-bar">
+    <label class="p-toggle">
+      <input type="checkbox" id="enabled" checked>
+      <span class="p-toggle-track"><span class="p-toggle-knob"></span></span>
+      <span class="p-toggle-label" id="toggleLabel">已开启</span>
+    </label>
+    <span id="reviewCount" style="display:none">
+      <span class="p-review-badge" id="reviewBadge">0</span>
+    </span>
+  </div>
+
+  <!-- Mode selector -->
+  <div class="p-mode-bar">
+    <div class="p-mode-selector" id="modeSelector">
+      <button class="p-mode-btn p-mode-active" data-mode="replace">替换学习</button>
+      <button class="p-mode-btn" data-mode="annotate">标注学习</button>
+      <button class="p-mode-btn" data-mode="translate">对比翻译</button>
+      <button class="p-mode-btn" data-mode="off">关闭</button>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="p-section">
+    <div class="p-row">
+      <label class="p-label" for="frequency">替换密度</label>
+      <select id="frequency" class="p-select">
+        <option value="low">低</option>
+        <option value="medium" selected>中</option>
+        <option value="high">高</option>
+      </select>
+    </div>
+    <div class="p-row">
+      <label class="p-label" for="level">词汇等级</label>
+      <select id="level" class="p-select">
+        <option value="cet4" selected>CET-4</option>
+        <option value="cet6">CET-6</option>
+        <option value="ielts">IELTS</option>
+        <option value="graduate">考研</option>
+      </select>
+    </div>
+    <div class="p-row">
+      <label class="p-label" for="dailyCount">每日新词</label>
+      <select id="dailyCount" class="p-select">
+        <option value="5">5 词</option>
+        <option value="10">10 词</option>
+        <option value="15" selected>15 词</option>
+        <option value="20">20 词</option>
+        <option value="30">30 词</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="p-section" id="statsSection">
+    <div class="p-section-header">今日统计</div>
+    <div class="p-stats">
+      <div class="p-stat"><span class="p-stat-num" id="statReplace">0</span><span class="p-stat-label">替换词数</span></div>
+      <div class="p-stat"><span class="p-stat-num" id="statAnnotate">0</span><span class="p-stat-label">标注词数</span></div>
+      <div class="p-stat"><span class="p-stat-num" id="statTranslate">0</span><span class="p-stat-label">翻译句数</span></div>
+      <div class="p-stat"><span class="p-stat-num" id="statMinutes">0</span><span class="p-stat-label">分钟活跃</span></div>
+    </div>
+  </div>
+
+  <!-- Excluded sites -->
+  <div class="p-section">
+    <div class="p-row">
+      <span class="p-label">排除站点</span>
+      <button id="excludeCurrent" class="p-btn p-btn-sm p-btn-danger">排除当前</button>
+    </div>
+    <div class="p-excluded-list" id="excludedList"></div>
+  </div>
+
+  <!-- API settings -->
+  <details class="p-api">
+    <summary>API 设置</summary>
+    <p class="p-api-hint">配置 DeepSeek / OpenAI 兼容 API。仅用于主动触发的 AI 功能。</p>
+    <input id="apiKey" class="p-input" type="password" placeholder="API Key (sk-...)">
+    <input id="apiEndpoint" class="p-input" type="text" placeholder="API 地址 (默认 DeepSeek)" value="https://api.deepseek.com">
+    <input id="apiModel" class="p-input" type="text" placeholder="模型名称 (例: deepseek-chat)">
+    <div class="p-row">
+      <button id="testApi" class="p-btn p-btn-sm">测试连接</button>
+      <button id="saveApi" class="p-btn p-btn-sm p-btn-primary">保存</button>
+    </div>
+  </details>
+
+  <!-- Voice settings -->
+  <details class="p-api">
+    <summary>发音设置</summary>
+    <p class="p-api-hint">选择朗读单词的发音引擎</p>
+    <div class="p-row">
+      <label class="p-label" for="voiceSelect">发音风格</label>
+      <select id="voiceSelect" class="p-select" style="flex:1">
+        <option value="">系统默认</option>
+      </select>
+    </div>
+  </details>
+
+  <!-- Footer -->
+  <div class="p-footer">
+    <button id="refreshPage" class="p-btn p-btn-sm">刷新当前页</button>
+    <button id="openPdfViewer" class="p-btn p-btn-sm">PDF 翻译</button>
+  </div>
+  <div class="p-footer p-footer-io">
+    <button id="exportConfig" class="p-btn-ghost">导出配置</button>
+    <button id="importConfig" class="p-btn-ghost">导入配置</button>
+    <input type="file" id="importFileInput" style="display:none" accept=".json">
+  </div>
+
+</div>
+<script src="../lib/storage.js"></script>
+<script src="popup.js"></script>
 </body>
 </html>

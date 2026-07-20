@@ -564,12 +564,12 @@ const IFLL_INJECTOR = (() => {
         if (!btn || btn.disabled) return;
         const wzh = tooltipEl.dataset.zh;
         if (btn.dataset.action === 'known') {
-          await IFLL_STORAGE.markKnown(wzh); btn.textContent = '✓ 已掌握'; btn.disabled = true;
+          await IFLL_STORAGE.markKnown(wzh); btn.textContent = '已掌握'; btn.disabled = true;
           document.querySelectorAll(`.ifll-word[data-zh="${wzh}"], .ifll-annotated[data-zh="${wzh}"]`).forEach(el => el.classList.add('ifll-known'));
         } else if (btn.dataset.action === 'unknown') {
           await IFLL_STORAGE.markUnknown(wzh);
           await IFLL_STORAGE.addToReview(wzh, tooltipEl.dataset.en);
-          btn.textContent = '✗ 加入复习'; btn.disabled = true;
+          btn.textContent = '加入复习'; btn.disabled = true;
         } else if (btn.dataset.action === 'exclude-site') {
           const h = window.location.hostname;
           const s = await IFLL_STORAGE.get();
@@ -601,7 +601,7 @@ const IFLL_INJECTOR = (() => {
     tooltipEl.dataset.zh = zh; tooltipEl.dataset.en = en;
     let html = `
       <div class="ifll-tt-header">
-        <div class="ifll-tt-en">${htmlEncode(en)}<button data-action="speak" class="ifll-btn-speak" title="朗读发音">🔊</button></div>
+        <div class="ifll-tt-en">${htmlEncode(en)}<button data-action="speak" class="ifll-btn-speak" title="朗读发音"></button></div>
         <div class="ifll-tt-level">${htmlEncode(span.dataset.level || '')}</div>
       </div>
       <div class="ifll-tt-meta">${htmlEncode(zh)}${span.dataset.ipa ? ' · <span class="ifll-tt-ipa">' + htmlEncode(span.dataset.ipa) + '</span>' : ''} · <span class="ifll-tt-pos">${posLatin}</span> ${htmlEncode(posCn)}</div>
