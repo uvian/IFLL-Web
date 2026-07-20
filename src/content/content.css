@@ -379,7 +379,10 @@
 }
 .ifll-btn-exclude:hover:not(:disabled) { background: #78350f; }
 
-/* ── Annotation mode ── */
+/* ---- Daily new-word highlight ---- */
+.ifll-word-daily {
+  font-weight: 600;
+}
 .ifll-annotated {
   text-decoration: underline;
   text-decoration-style: dotted;

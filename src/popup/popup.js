@@ -238,6 +238,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   frequency.addEventListener('change', () => savePartial({ frequency: frequency.value }));
   level.addEventListener('change', () => savePartial({ level: level.value }));
 
+  /* ── Daily word count ── */
+  const dailyCount = document.getElementById('dailyCount');
+  if (dailyCount) {
+    dailyCount.value = String(settings.dailyWordCount || 15);
+    dailyCount.addEventListener('change', () => savePartial({ dailyWordCount: parseInt(dailyCount.value) || 15 }));
+  }
+
   /* ── Exclude current ── */
   const excludeCurrent = document.getElementById('excludeCurrent');
   if (excludeCurrent) {

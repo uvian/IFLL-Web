@@ -166,7 +166,7 @@ const IFLL_INJECTOR = (() => {
   }
 
   /* ---- Replace text node ---- */
-  function replaceInTextNode(node, matches) {
+  function replaceInTextNode(node, matches, dailyWordSet) {
     if (!matches.length || !node.parentNode) return;
     const sorted = [...matches].sort((a, b) => b.idx - a.idx);
     let text = node.textContent;
@@ -175,7 +175,7 @@ const IFLL_INJECTOR = (() => {
     for (const m of sorted) {
       const after = text.slice(m.end, lastEnd);
       const span = document.createElement('span');
-      span.className = 'ifll-word';
+      span.className = dailyWordSet && dailyWordSet.has(m.zh) ? 'ifll-word ifll-word-daily' : 'ifll-word';
       span.dataset.en = m.en; span.dataset.zh = m.zh; span.dataset.def = m.def;
       span.dataset.pos = m.pos; span.dataset.posCn = m.posCn;
       span.dataset.examples = JSON.stringify(m.examples);
@@ -350,14 +350,54 @@ const IFLL_INJECTOR = (() => {
       textNodes.push(node);
     }
     let totalReplaced = 0;
+
+    /* ── Phrase matching (collocation priority) ── */
+    const phraseMap = await IFLL_STORAGE.getPhraseMap();
+    const dailyWordSet = new Set((await IFLL_STORAGE.ensureDailyWords()).map(w => w.zh));
+
     for (const tn of textNodes) {
-      const text = tn.textContent;
+      let text = tn.textContent;
+
+      /* 1. Phrase-level replacement first */
+      let phraseReplaced = false;
+      for (const [zhPhrase, enPhrase] of Object.entries(phraseMap)) {
+        if (text.includes(zhPhrase)) {
+          const idx = text.indexOf(zhPhrase);
+          const before = text.slice(0, idx);
+          const after = text.slice(idx + zhPhrase.length);
+          const span = document.createElement('span');
+          span.className = 'ifll-word ifll-word-phrase';
+          span.dataset.en = enPhrase;
+          span.dataset.zh = zhPhrase;
+          span.dataset.def = enPhrase;
+          span.dataset.pos = 'phrase';
+          span.dataset.posCn = '搭配';
+          span.dataset.ipa = '';
+          span.dataset.examples = '[]';
+          span.dataset.examplesCn = '[]';
+          span.textContent = enPhrase;
+          const frag = document.createDocumentFragment();
+          if (before) frag.appendChild(document.createTextNode(before));
+          const wrapper = document.createElement('span');
+          wrapper.className = 'ifll-replaced';
+          wrapper.appendChild(span);
+          if (after) wrapper.appendChild(document.createTextNode(after));
+          frag.appendChild(wrapper);
+          tn.parentNode.replaceChild(frag, tn);
+          phraseReplaced = true;
+          totalReplaced++;
+          break; // one phrase per node to avoid complexity
+        }
+      }
+      if (phraseReplaced) continue;
+
+      /* 2. Word-level replacement */
       if (!/[\u4e00-\u9fff]/.test(text)) continue;
       const matches = findMatches(text, null, knownSet, level);
       if (!matches.length) continue;
       const count = getReplaceCount(frequency, text.length);
       const selected = selectMatches(matches, count, scene);
-      if (selected.length) { replaceInTextNode(tn, selected); totalReplaced += selected.length; }
+      if (selected.length) { replaceInTextNode(tn, selected, dailyWordSet); totalReplaced += selected.length; }
     }
     if (totalReplaced > 0) IFLL_STORAGE.trackStat('replace', totalReplaced).catch(() => {});
   }
