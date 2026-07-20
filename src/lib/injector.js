@@ -497,6 +497,12 @@ const IFLL_INJECTOR = (() => {
   }
 
   async function fetchAiExamples(en, zh) {
+    /* Check cache first (7-day TTL) */
+    const cacheEntry = await IFLL_STORAGE.getAiCacheEntry(en);
+    const now = Date.now();
+    if (cacheEntry?.examples?.length && cacheEntry.examplesCachedAt > now - 7 * 86400000) {
+      return { success: true, examples: cacheEntry.examples, cached: true };
+    }
     const s = await IFLL_STORAGE.get();
     if (!s.apiKey) return { error: 'no api key' };
     try {
@@ -505,11 +511,19 @@ const IFLL_INJECTOR = (() => {
         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout (15s)')), 15000))
       ]);
       if (!result || result.error) return { error: (result && result.error) || 'no response' };
-      return { success: true, examples: result.examples || [] };
+      const ex = result.examples || [];
+      /* Save to cache */
+      const entry = cacheEntry || {};
+      entry.examples = ex; entry.examplesCachedAt = now;
+      await IFLL_STORAGE.setAiCacheEntry(en, entry);
+      return { success: true, examples: ex };
     } catch (err) { return { error: err.message }; }
   }
 
   async function fetchDeepAnalysis(en, zh, def) {
+    /* Check cache first (permanent — synonyms/usage don't change) */
+    const cacheEntry = await IFLL_STORAGE.getAiCacheEntry(en);
+    if (cacheEntry?.deep) return { success: true, data: cacheEntry.deep, cached: true };
     const s = await IFLL_STORAGE.get();
     if (!s.apiKey) return { error: 'no api key' };
     try {
@@ -518,6 +532,10 @@ const IFLL_INJECTOR = (() => {
         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout (20s)')), 20000))
       ]);
       if (!result || result.error) return { error: (result && result.error) || 'no response' };
+      /* Save to cache (permanent) */
+      const entry = cacheEntry || {};
+      entry.deep = result; entry.deepCachedAt = now;
+      await IFLL_STORAGE.setAiCacheEntry(en, entry);
       return { success: true, data: result };
     } catch (err) { return { error: err.message }; }
   }
@@ -705,7 +723,7 @@ const IFLL_INJECTOR = (() => {
       if (d.collocations?.length) h += `<div class="ifll-tt-deep-row"><span class="ifll-tt-deep-tag">搭配</span> ${d.collocations.join(', ')}</div>`;
       if (d.usage) h += `<div class="ifll-tt-deep-usage">${htmlEncode(d.usage)}</div>`;
       const area = document.getElementById('ifll-deep-area');
-      if (area) area.innerHTML = h || '<div class="ifll-tt-deep-empty">暂无数据</div>';
+      if (area) area.innerHTML = (h || '<div class="ifll-tt-deep-empty">暂无数据</div>') + (r.cached ? '<div class="ifll-tt-cached">💾 cached</div>' : '');
     });
   }
 
