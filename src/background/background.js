@@ -16,8 +16,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     IFLL_AI_EXAMPLES: () => handleAiExamples(message.en, message.zh, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_AI_DEEP_ANALYSIS: () => handleDeepAnalysis(message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_AI_TRANSLATE: () => handleAiTranslate(message.text, message.apiKey, message.apiEndpoint, message.apiModel),
+    IFLL_AI_PDF_TRANSLATE: () => handleAiTranslate(message.text, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_TEST_API: () => testApiConnection(message.apiKey, message.apiEndpoint, message.apiModel),
-    IFLL_LIST_MODELS: () => listModels(message.apiKey, message.apiEndpoint)
+    IFLL_LIST_MODELS: () => listModels(message.apiKey, message.apiEndpoint),
+    IFLL_OPEN_PDF: () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL(`src/pdf/pdf.html?url=${encodeURIComponent(message.url)}`) });
+      return Promise.resolve({});
+    }
   };
   const fn = handlers[message.type];
   if (fn) { fn().then(sendResponse).catch(err => sendResponse({ error: err.message })); return true; }

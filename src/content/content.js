@@ -92,4 +92,17 @@
   });
 
   if (document.body) { init(); } else { document.addEventListener('DOMContentLoaded', init); }
+
+  /* ── PDF detection ── */
+  if (window.location.pathname.endsWith('.pdf') || document.contentType === 'application/pdf') {
+    const btn = document.createElement('div');
+    btn.className = 'ifll-pdf-float';
+    btn.textContent = '📑 用 IFLL 翻译此 PDF';
+    btn.title = '在新页面打开 PDF 对照翻译';
+    btn.addEventListener('click', () => {
+      const pdfUrl = window.location.href;
+      chrome.runtime.sendMessage({ type: 'IFLL_OPEN_PDF', url: pdfUrl });
+    });
+    document.body?.appendChild(btn);
+  }
 })();
