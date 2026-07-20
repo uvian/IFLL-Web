@@ -11,9 +11,6 @@ const IFLL_INJECTOR = (() => {
     '以','为','之','其','所','者','被','于','与','因','但','若','虽','然'
   ]);
 
-  const MODE = { current: 'replace', hostname: '' };
-  let currentMode = 'replace';
-  let lastHostname = '';
 
   /* ---- Config ---- */
   function getReplaceCount(frequency, textLen) {
@@ -210,7 +207,9 @@ const IFLL_INJECTOR = (() => {
     return enWordBank;
   }
 
-  function injectAnnotate(level) {
+  function injectAnnotate(settings) {
+    const hostname = window.location.hostname;
+    if (settings?.excludedSites?.some(s => hostname.includes(s) || s.includes(hostname))) return;
     const bank = getEnWordBank();
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
     let node;
@@ -233,8 +232,7 @@ const IFLL_INJECTOR = (() => {
       const fragment = document.createDocumentFragment();
       for (let i = 0; i < words.length; i++) {
         const word = words[i].toLowerCase().replace(/[^a-z-]/g, '');
-        const clean = word.replace(/[^a-z-]/g, '');
-        const entry = clean.length >= 3 ? bank.get(clean) : null;
+        const entry = word.length >= 3 ? bank.get(word) : null;
         if (entry && annotateCount < 15) {
           const span = document.createElement('span');
           span.className = 'ifll-annotated';
@@ -263,6 +261,8 @@ const IFLL_INJECTOR = (() => {
   /* ---- Translate mode: paragraph-level AI translation ---- */
   let translateCache = {};
   function injectTranslate(settings) {
+    const hostname = window.location.hostname;
+    if (settings?.excludedSites?.some(s => hostname.includes(s) || s.includes(hostname))) return;
     if (!settings.apiKey) {
       /* Show hint once if no API key */
       if (!document.querySelector('.ifll-tt-hint')) {
@@ -524,13 +524,13 @@ const IFLL_INJECTOR = (() => {
         </div>`;
       }
       tooltipEl.innerHTML = html;
+      setupAiButtons();
+      const x = rect.left + window.scrollX;
+      const y = rect.bottom + window.scrollY + 4;
+      tooltipEl.style.left = Math.min(x, window.innerWidth - 400) + 'px';
+      tooltipEl.style.top = y + 'px';
+      tooltipEl.style.display = 'block';
     })();
-
-    const x = rect.left + window.scrollX;
-    const y = rect.bottom + window.scrollY + 4;
-    tooltipEl.style.left = Math.min(x, window.innerWidth - 400) + 'px';
-    tooltipEl.style.top = y + 'px';
-    tooltipEl.style.display = 'block';
   }
 
   function hideTooltip(e) {
@@ -539,9 +539,12 @@ const IFLL_INJECTOR = (() => {
     }
   }
 
+  let _tlsDone = false;
   function setupTooltipListeners() {
+    if (_tlsDone) return;
     document.addEventListener('click', showTooltip);
     document.addEventListener('click', hideTooltip, true);
+    _tlsDone = true;
   }
 
   function removeTooltip() {
@@ -607,8 +610,8 @@ const IFLL_INJECTOR = (() => {
 
   /* ---- Public API ---- */
   async function start(mode) {
-    currentMode = mode;
-    lastHostname = window.location.hostname;
+    translateCache = {};
+    enWordBank = null;
     try {
       const s = await IFLL_STORAGE.get();
       if (!s.enabled) return;
@@ -617,19 +620,20 @@ const IFLL_INJECTOR = (() => {
         setupTooltipListeners();
         startObserver(s);
       } else if (mode === 'annotate') {
-        injectAnnotate(s.level);
+        injectAnnotate(s);
         setupTooltipListeners();
       } else if (mode === 'translate') {
         injectTranslate(s);
         setupTooltipListeners();
       }
-      setupAiButtons();
+      /* AI buttons set up inside showTooltip */
     } catch (err) { console.warn('[IFLL] start error:', err); }
   }
 
   function destroy() {
     stopObserver(); removeTooltip();
     document.querySelectorAll('.ifll-word, .ifll-replaced, .ifll-annotated, .ifll-trans-panel').forEach(el => {
+      if (!el.parentNode) return;
       const t = document.createTextNode(el.textContent);
       el.parentNode.replaceChild(t, el);
     });

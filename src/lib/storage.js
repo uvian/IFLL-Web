@@ -79,13 +79,18 @@ const IFLL_STORAGE = (() => {
     const { reviewQueue } = await get();
     const item = reviewQueue.find(w => w.zh === zh);
     if (!item) return;
-    const easeMap = { 4: 2.5, 3: 2.0, 2: 1.2, 1: 0 };
-    const intervalMultiplier = easeMap[score] || 2.0;
-    item.reviewCount += 1;
-    item.ease = Math.max(1.3, (item.ease || 2.5) + (0.1 - (score < 3 ? 0.5 : 0)));
-    const baseInterval = score === 1 ? 1 : (item.reviewCount === 1 ? 1 : item.reviewCount === 2 ? 3 : item.reviewCount * item.ease);
-    const intervalDays = Math.min(365, Math.max(1, Math.round(baseInterval * intervalMultiplier)));
-    item.nextReview = Date.now() + intervalDays * 86400000;
+    const easeAdj = { 4: 0.3, 3: 0.1, 2: -0.2, 1: -0.3 }[score] || 0;
+    item.ease = Math.max(1.3, (item.ease || 2.5) + easeAdj);
+    if (score < 3) {
+      item.reviewCount = 0;
+      item.nextReview = Date.now() + 86400000;
+    } else {
+      item.reviewCount += 1;
+      const intervals = [1, 3, 7, 14, 30, 90, 180, 365];
+      const idx = Math.min(item.reviewCount, intervals.length - 1);
+      const intervalDays = Math.round(intervals[idx] * item.ease / 2.5);
+      item.nextReview = Date.now() + Math.min(365, Math.max(1, intervalDays)) * 86400000;
+    }
     await set({ reviewQueue });
   }
 
