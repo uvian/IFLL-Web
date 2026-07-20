@@ -3,12 +3,20 @@
  * AI proxy: examples, deep analysis, model listing, connection test
  */
 chrome.runtime.onInstalled.addListener(async () => {
-  await chrome.storage.sync.set({
-    enabled: true, frequency: 'medium', level: 'cet4',
+  /* Only backfill missing keys — never overwrite existing user data */
+  const s = await chrome.storage.sync.get(null);
+  const defaults = {
+    frequency: 'medium', level: 'cet4',
     knownWords: [], excludedSites: [],
-    apiKey: '', apiEndpoint: 'https://api.deepseek.com', apiModel: 'deepseek-chat',
-    reviewQueue: [], userWords: []
-  });
+    reviewQueue: [], userWords: [],
+    dailyWordCount: 15, phraseMap: {},
+    tooltipTheme: 'auto'
+  };
+  const patch = {};
+  for (const [k, v] of Object.entries(defaults)) {
+    if (!(k in s)) patch[k] = v;
+  }
+  if (Object.keys(patch).length) await chrome.storage.sync.set(patch);
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

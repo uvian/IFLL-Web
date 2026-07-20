@@ -650,7 +650,7 @@ const IFLL_INJECTOR = (() => {
     html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-actions">
       <button data-action="known" class="ifll-btn-known">✓ 认识</button>
       <button data-action="unknown" class="ifll-btn-unknown">✗ 不认识</button>
-      <button data-action="exclude-site" class="ifll-btn-exclude">⛔ 排除此站</button>
+      <button data-action="exclude-site" class="ifll-btn-exclude">排除此站</button>
     </div>
     <div class="ifll-tt-actions ifll-tt-actions-secondary">
       <button data-action="add-word" class="ifll-btn-addword">加入词库</button>
@@ -670,14 +670,15 @@ const IFLL_INJECTOR = (() => {
       }
       tooltipEl.innerHTML = html;
       setupAiButtons();
+      /* Measure AFTER content is rendered, before final positioning */
+      tooltipEl.style.display = 'block';
+      const ttH = tooltipEl.offsetHeight;
       const x = rect.left + window.scrollX;
       const y = rect.bottom + window.scrollY + 4;
       const ttW = 300;
       tooltipEl.style.left = Math.min(x, window.innerWidth - ttW - 8) + 'px';
-      const ttH = tooltipEl.offsetHeight || 180;
-      const showBelow = y + ttH + 8 < window.innerHeight;
-      tooltipEl.style.top = showBelow ? y + 'px' : (rect.top + window.scrollY - ttH - 8) + 'px';
-      tooltipEl.style.display = 'block';
+      const spaceBelow = window.innerHeight - rect.bottom - 10;
+      tooltipEl.style.top = (ttH < spaceBelow ? y : rect.top + window.scrollY - ttH - 8) + 'px';
     })();
   }
 
