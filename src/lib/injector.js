@@ -291,7 +291,7 @@ const IFLL_INJECTOR = (() => {
       if (!document.querySelector('.ifll-tt-hint')) {
         const hint = document.createElement('div');
         hint.className = 'ifll-tt-hint';
-        hint.textContent = '🔑 对比翻译需要配置 AI API Key (IFLL 弹窗 → AI 增强)';
+        hint.textContent = '对比翻译需要配置 AI API Key (IFLL 弹窗 → AI 增强)';
         hint.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:2147483647;background:#fff3cd;color:#856404;padding:10px 16px;border-radius:8px;font-size:13px;font-family:sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.1);max-width:300px;';
         document.body.appendChild(hint);
         setTimeout(() => hint.remove(), 8000);
@@ -624,6 +624,7 @@ const IFLL_INJECTOR = (() => {
     }
 
     tooltipEl.dataset.zh = zh; tooltipEl.dataset.en = en;
+    applyTooltipTheme(tooltipEl);
     let html = `
       <div class="ifll-tt-header">
         <div class="ifll-tt-en">${htmlEncode(en)}<button data-action="speak" class="ifll-btn-speak" title="朗读发音"></button></div>
@@ -634,7 +635,7 @@ const IFLL_INJECTOR = (() => {
       <div class="ifll-tt-def">${def}</div>`;
 
     if (examples.length) {
-      html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">📖 例句</div>`;
+      html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">例句</div>`;
       const maxShow = Math.min(3, examples.length);
       for (let i = 0; i < maxShow; i++) {
         html += `<div class="ifll-tt-example">"${htmlEncode(examples[i])}"</div>`;
@@ -642,9 +643,9 @@ const IFLL_INJECTOR = (() => {
       }
     }
 
-    html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">🔍 AI 深度解析</div>`;
+    html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">深度解析</div>`;
     html += `<div class="ifll-tt-deep" id="ifll-deep-area"><button data-action="deep-analyze" class="ifll-btn-ai" id="ifll-deep-btn">点击生成</button></div>`;
-    html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">🤖 AI 例句</div>`;
+    html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">AI 例句</div>`;
     html += `<div class="ifll-tt-ai" id="ifll-ai-area"><button data-action="ai-examples" class="ifll-btn-ai" id="ifll-ai-btn">生成更多例句</button></div>`;
     html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-actions">
       <button data-action="known" class="ifll-btn-known">✓ 认识</button>
@@ -652,27 +653,30 @@ const IFLL_INJECTOR = (() => {
       <button data-action="exclude-site" class="ifll-btn-exclude">⛔ 排除此站</button>
     </div>
     <div class="ifll-tt-actions ifll-tt-actions-secondary">
-      <button data-action="add-word" class="ifll-btn-addword">📝 加入词库</button>
+      <button data-action="add-word" class="ifll-btn-addword">加入词库</button>
     </div>`;
 
     /* SM-2 review scoring buttons (only for items in review queue) */
     (async () => {
       const { reviewQueue } = await IFLL_STORAGE.get();
       if (reviewQueue.some(w => w.zh === zh)) {
-        html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">📝 复习评分</div>`;
+        html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">复习评分</div>`;
         html += `<div class="ifll-tt-actions ifll-tt-actions-review">
-          <button data-action="review-4" class="ifll-btn-review ifll-btn-r4">😊 轻松</button>
-          <button data-action="review-3" class="ifll-btn-review ifll-btn-r3">🙂 正确</button>
-          <button data-action="review-2" class="ifll-btn-review ifll-btn-r2">🤔 模糊</button>
-          <button data-action="review-1" class="ifll-btn-review ifll-btn-r1">😰 忘记</button>
+          <button data-action="review-4" class="ifll-btn-review ifll-btn-r4">轻松</button>
+          <button data-action="review-3" class="ifll-btn-review ifll-btn-r3">正确</button>
+          <button data-action="review-2" class="ifll-btn-review ifll-btn-r2">模糊</button>
+          <button data-action="review-1" class="ifll-btn-review ifll-btn-r1">忘记</button>
         </div>`;
       }
       tooltipEl.innerHTML = html;
       setupAiButtons();
       const x = rect.left + window.scrollX;
       const y = rect.bottom + window.scrollY + 4;
-      tooltipEl.style.left = Math.min(x, window.innerWidth - 400) + 'px';
-      tooltipEl.style.top = y + 'px';
+      const ttW = 300;
+      tooltipEl.style.left = Math.min(x, window.innerWidth - ttW - 8) + 'px';
+      const ttH = tooltipEl.offsetHeight || 180;
+      const showBelow = y + ttH + 8 < window.innerHeight;
+      tooltipEl.style.top = showBelow ? y + 'px' : (rect.top + window.scrollY - ttH - 8) + 'px';
       tooltipEl.style.display = 'block';
     })();
   }
@@ -730,7 +734,7 @@ const IFLL_INJECTOR = (() => {
       if (area) area.innerHTML = r.examples.map(ex =>
         '<div class="ifll-tt-example ifll-tt-ai-example">' + htmlEncode(ex.en || '') + '</div>' +
         (ex.cn ? '<div class="ifll-tt-trans">' + renderBoldHtml(ex.cn) + '</div>' : '')
-        ).join('') + (r.cached ? '<div class="ifll-tt-cached">💾 cached</div>' : '');
+        ).join('') + (r.cached ? '<div class="ifll-tt-cached">cached</div>' : '');
     });
 
     const deepBtn = document.getElementById('ifll-deep-btn');
@@ -748,7 +752,7 @@ const IFLL_INJECTOR = (() => {
       if (d.collocations?.length) h += `<div class="ifll-tt-deep-row"><span class="ifll-tt-deep-tag">搭配</span> ${d.collocations.join(', ')}</div>`;
       if (d.usage) h += `<div class="ifll-tt-deep-usage">${htmlEncode(d.usage)}</div>`;
       const area = document.getElementById('ifll-deep-area');
-      if (area) area.innerHTML = (h || '<div class="ifll-tt-deep-empty">暂无数据</div>') + (r.cached ? '<div class="ifll-tt-cached">💾 cached</div>' : '');
+      if (area) area.innerHTML = (h || '<div class="ifll-tt-deep-empty">暂无数据</div>') + (r.cached ? '<div class="ifll-tt-cached">cached</div>' : '');
     });
   }
 

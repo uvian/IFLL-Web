@@ -32,7 +32,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   level.value = settings.level;
   dailyCount.value = String(settings.dailyWordCount || 15);
   apiKey.value = settings.apiKey || '';
-  apiModel.value = settings.apiModel || 'deepseek-chat';
+  // Ensure saved model is in the dropdown
+  const savedModel = settings.apiModel || 'deepseek-chat';
+  if (savedModel && !Array.from(apiModel.options).some(o => o.value === savedModel)) {
+    const opt = document.createElement('option');
+    opt.value = savedModel;
+    opt.textContent = savedModel;
+    apiModel.appendChild(opt);
+  }
+  apiModel.value = savedModel;
 
   /* Restore API endpoint */
   const presetEndpoints = ['https://api.deepseek.com','https://opencode.ai/zen/go/v1','https://api.openai.com/v1','https://openrouter.ai/api/v1'];
@@ -196,7 +204,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const result = await chrome.runtime.sendMessage({
         type: 'IFLL_TEST_API',
         apiKey: apiKey.value.trim(),
-        apiEndpoint: await getEffectiveEndpoint()
+        apiEndpoint: await getEffectiveEndpoint(),
+        apiModel: apiModel.value.trim()
       });
       testApiBtn.textContent = result?.success ? '连接成功' : (result?.error || '失败');
     } catch (e) { testApiBtn.textContent = '无响应'; }
@@ -211,7 +220,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const result = await chrome.runtime.sendMessage({
         type: 'IFLL_LIST_MODELS',
         apiKey: apiKey.value.trim(),
-        apiEndpoint: await getEffectiveEndpoint()
+        apiEndpoint: await getEffectiveEndpoint(),
+        apiModel: apiModel.value.trim()
       });
       if (result?.models?.length) {
         apiModel.innerHTML = '';
