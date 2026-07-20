@@ -502,7 +502,6 @@ const IFLL_INJECTOR = (() => {
   }
 
   async function showTooltip(e) {
-    e.preventDefault(); e.stopPropagation();
     const span = e.target.closest('.ifll-word, .ifll-annotated');
     if (!span) return;
     const rect = span.getBoundingClientRect();
