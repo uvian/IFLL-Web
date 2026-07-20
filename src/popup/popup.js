@@ -281,11 +281,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   exportBtn.addEventListener('click', async () => {
     const all = await chrome.storage.sync.get(null);
+    /* Add metadata */
+    all.__ifll_export_version = 1;
+    all.__ifll_export_date = new Date().toISOString();
     const blob = new Blob([JSON.stringify(all, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'ifll-config.json';
+    a.download = `ifll-backup-${new Date().toISOString().slice(0,10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   });
@@ -298,11 +301,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
-      const allowed = ['enabled','frequency','level','knownWords','excludedSites','apiKey','apiEndpoint','apiModel','siteModes','defaultMode'];
+      /* All user-facing fields that should be imported */
+      const allowed = [
+        'enabled','frequency','level','knownWords','excludedSites',
+        'apiKey','apiEndpoint','apiModel','voiceName','voiceRate',
+        'siteModes','defaultMode','dailyWordCount','dailyWords','dailyWordDate',
+        'reviewQueue','userWords','phraseMap','dailyStats'
+      ];
       const clean = {};
       for (const k of allowed) if (k in data) clean[k] = data[k];
+      /* Merge with existing to preserve wordbank-linked data */
       await chrome.storage.sync.set(clean);
       importBtn.textContent = '✅ 已导入';
+      /* Reset daily words so new device picks today's batch */
+      importBtn.textContent = '✅ 已导入（刷新中）';
       setTimeout(() => { location.reload(); }, 1200);
     } catch (_) {
       importBtn.textContent = '❌ 文件无效';
