@@ -121,7 +121,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       const mode = btn.dataset.mode;
       modeSelector.querySelectorAll('.p-mode-btn').forEach(b => b.classList.remove('p-mode-active'));
       btn.classList.add('p-mode-active');
-      await IFLL_STORAGE.setModeForHost(window.location.hostname, mode);
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tabs[0]) {
         let hostname;

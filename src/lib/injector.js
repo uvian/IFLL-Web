@@ -673,12 +673,11 @@ const IFLL_INJECTOR = (() => {
       /* Measure AFTER content is rendered, before final positioning */
       tooltipEl.style.display = 'block';
       const ttH = tooltipEl.offsetHeight;
-      const x = rect.left + window.scrollX;
-      const y = rect.bottom + window.scrollY + 4;
-      const ttW = 300;
-      tooltipEl.style.left = Math.min(x, window.innerWidth - ttW - 8) + 'px';
+      /* Tooltip is position:fixed — use viewport coordinates directly, no scroll offset */
+      const [ttW, ttMax] = [300, window.innerWidth - 8];
+      tooltipEl.style.left = Math.min(rect.left, ttMax - ttW) + 'px';
       const spaceBelow = window.innerHeight - rect.bottom - 10;
-      tooltipEl.style.top = (ttH < spaceBelow ? y : rect.top + window.scrollY - ttH - 8) + 'px';
+      tooltipEl.style.top = (ttH < spaceBelow ? rect.bottom + 4 : rect.top - ttH - 8) + 'px';
     })();
   }
 

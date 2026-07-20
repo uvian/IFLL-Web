@@ -17,6 +17,10 @@ chrome.runtime.onInstalled.addListener(async () => {
     if (!(k in s)) patch[k] = v;
   }
   if (Object.keys(patch).length) await chrome.storage.sync.set(patch);
+  /* One-time migration: upgrade broken default model for existing users */
+  if (s.apiModel === 'deepseek-chat') {
+    await chrome.storage.sync.set({ apiModel: 'deepseek-v4-flash' });
+  }
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
