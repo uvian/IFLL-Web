@@ -567,7 +567,7 @@ const IFLL_INJECTOR = (() => {
           type: 'IFLL_AI_COMBINED', en, zh, def,
           apiKey: s.apiKey, apiEndpoint: s.apiEndpoint, apiModel: s.apiModel
         }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout (20s)')), 20000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout (12s)')), 12000))
       ]);
     } catch (err) {
       /* Retry once on network error */
@@ -604,7 +604,7 @@ const IFLL_INJECTOR = (() => {
       let accumulated = '', resolved = false;
       const timer = setTimeout(() => {
         if (!resolved) { resolved = true; try { port.disconnect(); } catch (_) {} reject(new Error('stream timeout')); }
-      }, 22000);
+      }, 14000);
       port.onMessage.addListener(msg => {
         if (resolved) return;
         if (msg.chunk) {

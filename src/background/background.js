@@ -79,9 +79,15 @@ function getContent(data) {
 /* ---- Robust JSON extraction (handles markdown, trailing commas, mixed text) ---- */
 function extractJson(text) {
   if (!text) return null;
-  /* Strip markdown code fences */
-  let cleaned = text.replace(/```\w*\s*[\s\S]*?```/g, '');  // remove fenced blocks entirely
-  cleaned = cleaned.replace(/```\w*\n?/g, '');               // stray fence markers
+  let cleaned = text;
+
+  /* Strategy 1: try extracting from markdown code blocks first (model sometimes wraps JSON in ```json) */
+  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) cleaned = fenceMatch[1];
+
+  /* Strategy 2: strip stray fence markers, blank lines, leading/trailing whitespace */
+  cleaned = cleaned.replace(/```\w*\n?/g, '').trim();
+
   /* Find outermost JSON object */
   const start = cleaned.indexOf('{');
   if (start < 0) return null;
@@ -95,13 +101,25 @@ function extractJson(text) {
     if (ch === '{') depth++;
     if (ch === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
   }
-  if (end <= start) return null;
+  if (end <= start) {
+    /* Strategy 3: unmatched braces — try auto-closing */
+    let json = cleaned.slice(start);
+    const missing = (json.match(/{/g) || []).length - (json.match(/}/g) || []).length;
+    if (missing > 0 && missing <= 3) {
+      json += '}'.repeat(missing);
+      json = json.replace(/,(\s*[}\]])/g, '$1');
+      try { return JSON.parse(json); } catch (_) {}
+    }
+    return null;
+  }
   let json = cleaned.slice(start, end);
   /* Remove trailing commas (invalid JSON, model artifact) */
   json = json.replace(/,(\s*[}\]])/g, '$1');
   try { return JSON.parse(json); } catch (e1) {
-    /* Try fixing unescaped quotes */
+    /* Strategy 4: fix unescaped quotes inside string values */
     try { return JSON.parse(json.replace(/(?<=\s):\s*"([^"]*"|(?<=")\s*(?=[,}]))/g, ': "FIXED"')); } catch (_) {}
+    /* Strategy 5: fix unescaped newlines in strings (replace with space) */
+    try { return JSON.parse(json.replace(/(?<=":\s*"[^"]*)\n(?=[^"]*")/g, ' ')); } catch (_) {}
     return null;
   }
 }
@@ -133,7 +151,7 @@ async function handleCombinedAnalysis(en, zh, def, apiKey, apiEndpoint, apiModel
         { role: 'system', content: COMBINED_SYSTEM },
         { role: 'user', content: `Word: "${en}" (${zh}${def ? ', ' + def : ''})` }
       ],
-      temperature: 0.5, max_tokens: 1000
+      temperature: 0.5, max_tokens: 600
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => 'unknown');
@@ -153,7 +171,7 @@ async function streamCombinedAnalysis(port, en, zh, def, apiKey, apiEndpoint, ap
   if (!apiKey) { port.postMessage({ error: 'no api key' }); return; }
   const baseUrl = (apiEndpoint || 'https://api.deepseek.com').replace(/\/+$/, '');
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25000);
+  const timer = setTimeout(() => controller.abort(), 15000);
   try {
     const resp = await fetch(baseUrl + '/chat/completions', {
       method: 'POST',
@@ -164,7 +182,7 @@ async function streamCombinedAnalysis(port, en, zh, def, apiKey, apiEndpoint, ap
           { role: 'system', content: COMBINED_SYSTEM },
           { role: 'user', content: `Word: "${en}" (${zh}${def ? ', ' + def : ''})` }
         ],
-        temperature: 0.5, max_tokens: 1000, stream: true
+        temperature: 0.5, max_tokens: 600, stream: true
       }),
       signal: controller.signal
     });
@@ -280,7 +298,7 @@ Return ONLY valid JSON, no markdown:
 Rare words: 1-2 good synonyms beat 3-4 bad ones.` },
         { role: 'user', content: `Word: "${en}" (${zh}, definition: ${def})` }
       ],
-      temperature: 0.5, max_tokens: 1000
+      temperature: 0.5, max_tokens: 600
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => 'unknown');
