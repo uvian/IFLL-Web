@@ -95,7 +95,7 @@ async function translateAll() {
   if (isTranslating || !allTextBlocks.length) return;
   const s = await IFLL_STORAGE.get();
   if (!s.apiKey) {
-    transContent.innerHTML = '<p class="ifll-pdf-trans-empty">🔑 请先在 IFLL 弹出窗配置 AI API Key</p>';
+    transContent.innerHTML = '<p class="ifll-pdf-trans-empty">请先在 IFLL 弹出窗配置 AI API Key</p>';
     return;
   }
   isTranslating = true;

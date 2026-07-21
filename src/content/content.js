@@ -54,7 +54,7 @@
       bar.className = 'ifll-prompt';
       bar.innerHTML = `
         <div class="ifll-prompt-body">
-          <span class="ifll-prompt-icon">📘</span>
+          <span class="ifll-prompt-icon"></span>
           <span class="ifll-prompt-text">
             <span class="ifll-prompt-title">当前页面的学习方式？</span>
             <span class="ifll-prompt-desc">选择一种模式开始学习</span>
