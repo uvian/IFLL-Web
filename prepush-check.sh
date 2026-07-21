@@ -43,6 +43,10 @@ check "grep -q 'onInstalled' src/background/background.js" "onInstalled handler"
 check "grep -q \"deepseek-v4-flash\" src/popup/popup.html" \
   "popup.html: default model is deepseek-v4-flash"
 
+# 8. No duplicate function declarations
+check '! (grep -Pc "^async function \w+.*" src/background/background.js | sort | uniq -c | awk '\''$1>1'\'' | grep -q . 2>/dev/null)' \
+  "background.js: no duplicate function declarations"
+
 echo ""
 if [ $fail -eq 0 ]; then
   echo "✅ All checks passed"
