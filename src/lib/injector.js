@@ -543,52 +543,120 @@ const IFLL_INJECTOR = (() => {
     return result;
   }
 
-  async function fetchAiExamples(en, zh) {
-    /* Check cache first (7-day TTL) */
+  /* ── Combined analysis: deep analysis + examples in ONE call ── */
+  async function fetchCombinedAnalysis(en, zh, def) {
+    /* Check cache first */
     const cacheEntry = await IFLL_STORAGE.getAiCacheEntry(en);
-    const now = Date.now();
-    if (cacheEntry?.examples?.length && cacheEntry.examplesCachedAt > now - AI_EXAMPLES_CACHE_TTL) {
-      return { success: true, examples: cacheEntry.examples, cached: true };
+    if (cacheEntry?.deep && cacheEntry?.examples?.length) {
+      return { success: true, data: cacheEntry.deep, examples: cacheEntry.examples, cached: true };
     }
     const s = await IFLL_STORAGE.get();
     if (!s.apiKey) return { error: 'no api key' };
-    try {
-      const result = await Promise.race([
-        chrome.runtime.sendMessage({ type: 'IFLL_AI_EXAMPLES', en, zh, apiKey: s.apiKey, apiEndpoint: s.apiEndpoint, apiModel: s.apiModel }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout (15s)')), 15000))
-      ]);
-      if (!result || result.error) return { error: (result && result.error) || 'no response' };
-      const ex = result.examples || [];
-      /* Save to cache */
-      const entry = cacheEntry || {};
-      entry.examples = ex; entry.examplesCachedAt = now;
-      await IFLL_STORAGE.setAiCacheEntry(en, entry);
-      return { success: true, examples: ex };
-    } catch (err) { return { error: err.message }; }
-  }
 
-  async function fetchDeepAnalysis(en, zh, def) {
-    /* Check cache first (permanent — synonyms/usage don't change) */
-    const cacheEntry = await IFLL_STORAGE.getAiCacheEntry(en);
-    if (cacheEntry?.deep) return { success: true, data: cacheEntry.deep, cached: true };
-    const s = await IFLL_STORAGE.get();
-    if (!s.apiKey) return { error: 'no api key' };
+    /* Try streaming via Port, fall back to non-streaming */
+    let result = null;
     try {
-      const result = await Promise.race([
-        chrome.runtime.sendMessage({ type: 'IFLL_AI_DEEP_ANALYSIS', en, zh, def, apiKey: s.apiKey, apiEndpoint: s.apiEndpoint, apiModel: s.apiModel }),
+      result = await fetchViaPort(en, zh, def, s);
+    } catch (_) {}
+    if (result?.success) return result;
+
+    /* Fallback: non-streaming via sendMessage */
+    try {
+      result = await Promise.race([
+        chrome.runtime.sendMessage({
+          type: 'IFLL_AI_COMBINED', en, zh, def,
+          apiKey: s.apiKey, apiEndpoint: s.apiEndpoint, apiModel: s.apiModel
+        }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout (20s)')), 20000))
       ]);
-      if (!result || result.error) return { error: (result && result.error) || 'no response' };
-      /* Only cache if the result has at least one useful field — don't cache empty data */
-      const hasData = result.synonyms?.length || result.antonyms?.length ||
-                      result.collocations?.length || result.usage || result.examples?.length;
-      if (hasData) {
-        const entry = cacheEntry || {};
-        entry.deep = result; entry.deepCachedAt = Date.now();
-        await IFLL_STORAGE.setAiCacheEntry(en, entry);
+    } catch (err) {
+      /* Retry once on network error */
+      if (err.message?.includes('timeout') || err.message?.includes('Extension context')) {
+        try {
+          result = await chrome.runtime.sendMessage({
+            type: 'IFLL_AI_COMBINED', en, zh, def,
+            apiKey: s.apiKey, apiEndpoint: s.apiEndpoint, apiModel: s.apiModel
+          });
+        } catch (_) {}
       }
-      return { success: true, data: result };
-    } catch (err) { return { error: err.message }; }
+    }
+    if (!result || result.error) return { error: (result && result.error) || 'no response' };
+
+    /* Cache if useful data present */
+    const hasData = result.synonyms?.length || result.antonyms?.length ||
+                    result.collocations?.length || result.usage || result.examples?.length;
+    if (hasData) {
+      const entry = cacheEntry || {};
+      entry.deep = { synonyms: result.synonyms, antonyms: result.antonyms, collocations: result.collocations, usage: result.usage };
+      entry.deepCachedAt = Date.now();
+      entry.examples = result.examples || [];
+      entry.examplesCachedAt = Date.now();
+      await IFLL_STORAGE.setAiCacheEntry(en, entry);
+    }
+    return { success: true, data: result, examples: result.examples || [] };
+  }
+
+  /* ── Streaming via Port (shows text as it arrives) ── */
+  function fetchViaPort(en, zh, def, s) {
+    return new Promise((resolve, reject) => {
+      let port;
+      try { port = chrome.runtime.connect({ name: 'ifll-stream' }); } catch (e) { return reject(e); }
+      let accumulated = '', resolved = false;
+      const timer = setTimeout(() => {
+        if (!resolved) { resolved = true; try { port.disconnect(); } catch (_) {} reject(new Error('stream timeout')); }
+      }, 22000);
+      port.onMessage.addListener(msg => {
+        if (resolved) return;
+        if (msg.chunk) {
+          accumulated += msg.chunk;
+          renderStreamChunk(accumulated);
+        } else if (msg.done) {
+          clearTimeout(timer); resolved = true;
+          try { port.disconnect(); } catch (_) {}
+          const parsed = extractJsonLocal(accumulated);
+          if (parsed) resolve({ success: true, data: parsed, examples: parsed.examples || [], streaming: true });
+          else reject(new Error('cannot parse stream'));
+        } else if (msg.error) {
+          clearTimeout(timer); resolved = true;
+          try { port.disconnect(); } catch (_) {}
+          reject(new Error(msg.error));
+        }
+      });
+      port.onDisconnect.addListener(() => {
+        if (!resolved) { clearTimeout(timer); resolved = true; reject(new Error('port disconnected')); }
+      });
+      port.postMessage({ type: 'IFLL_AI_COMBINED', en, zh, def, apiKey: s.apiKey, apiEndpoint: s.apiEndpoint, apiModel: s.apiModel });
+    });
+  }
+
+  function extractJsonLocal(text) {
+    if (!text) return null;
+    let cleaned = text.replace(/```\w*\s*[\s\S]*?```/g, '').replace(/```\w*\n?/g, '');
+    const start = cleaned.indexOf('{');
+    if (start < 0) return null;
+    let depth = 0, end = -1, inString = false, escaped = false;
+    for (let i = start; i < cleaned.length; i++) {
+      const ch = cleaned[i];
+      if (escaped) { escaped = false; continue; }
+      if (ch === '\\') { escaped = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === '{') depth++;
+      if (ch === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+    }
+    if (end <= start) return null;
+    let json = cleaned.slice(start, end);
+    json = json.replace(/,(\s*[}\]])/g, '$1');
+    try { return JSON.parse(json); } catch (_) { return null; }
+  }
+
+  /* ── Incremental render for streaming response ── */
+  function renderStreamChunk(text) {
+    const area = document.getElementById('ifll-deep-area');
+    if (!area) return;
+    /* Show raw text as it streams in — simple typing effect */
+    const preview = text.length > 200 ? text.slice(-200) : text;
+    area.innerHTML = `<div class="ifll-tt-deep-streaming">${htmlEncode(preview).replace(/\n/g, '<br>')}<span class="ifll-tt-cursor">▌</span></div>`;
   }
 
   async function showTooltip(e) {
@@ -673,8 +741,8 @@ const IFLL_INJECTOR = (() => {
       }
     }
 
-    html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">深度解析</div>`;
-    html += `<div class="ifll-tt-deep" id="ifll-deep-area"><button data-action="deep-analyze" class="ifll-btn-ai" id="ifll-deep-btn">点击生成</button></div>`;
+    html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">AI 解析</div>`;
+    html += `<div class="ifll-tt-deep" id="ifll-deep-area"><button data-action="deep-analyze" class="ifll-btn-ai" id="ifll-deep-btn">全面解析</button></div>`;
     /* Custom AI action buttons */
     const sCfg = await IFLL_STORAGE.get();
     const acts = sCfg.customActions || [];
@@ -683,8 +751,6 @@ const IFLL_INJECTOR = (() => {
       acts.forEach(a => html += `<button class="ifll-btn-custom" data-action-id="${a.id}">${a.name}</button>`);
       html += `</div>`;
     }
-    html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">AI 例句</div>`;
-    html += `<div class="ifll-tt-ai" id="ifll-ai-area"><button data-action="ai-examples" class="ifll-btn-ai" id="ifll-ai-btn">生成更多例句</button></div>`;
     html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-actions">
       <button data-action="known" class="ifll-btn-known">✓ 认识</button>
       <button data-action="unknown" class="ifll-btn-unknown">✗ 不认识</button>
@@ -833,24 +899,8 @@ const IFLL_INJECTOR = (() => {
         el.appendChild(btn);
       }
     });
-    const aiBtn = document.getElementById('ifll-ai-btn');
-    if (aiBtn) aiBtn.addEventListener('click', async () => {
-      if (!tooltipEl) return;
-      const s = await IFLL_STORAGE.get();
-      if (!s.apiKey) { aiBtn.textContent = '⚠️ 无 API Key'; return; }
-      aiBtn.textContent = '⏳ 生成中...'; aiBtn.disabled = true;
-      const r = await fetchAiExamples(tooltipEl.dataset.en, tooltipEl.dataset.zh);
-      if (!r.success) { aiBtn.textContent = '⚠️ ' + (r.error || '失败'); aiBtn.disabled = false; return; }
-      if (!r.examples?.length) { aiBtn.textContent = '⚠️ 返回为空'; aiBtn.disabled = false; return; }
-      const area = document.getElementById('ifll-ai-area');
-      if (area) area.innerHTML = r.examples.map(ex =>
-        '<div class="ifll-tt-example ifll-tt-ai-example">' + htmlEncode(ex.en || '') + '</div>' +
-        (ex.cn ? '<div class="ifll-tt-trans">' + renderBoldHtml(ex.cn) + '</div>' : '')
-        ).join('') + (r.cached ? '<div class="ifll-tt-cached">cached</div>' : '');
-    });
-
-    /* ── Deep analysis runner (shared by initial + regen buttons) ── */
-    async function runDeepAnalysis(regen = false) {
+    /* ── Combined analysis runner (deep analysis + examples in one call) ── */
+    async function runCombinedAnalysis(regen = false) {
       if (!tooltipEl) return;
       const s = await IFLL_STORAGE.get();
       const btn = document.getElementById('ifll-deep-btn');
@@ -858,28 +908,37 @@ const IFLL_INJECTOR = (() => {
       if (!s.apiKey) { btn.textContent = '无 API Key'; return; }
       const en = tooltipEl.dataset.en, zh = tooltipEl.dataset.zh;
       if (regen) await IFLL_STORAGE.clearAiCache(en);
-      btn.textContent = '分析中...'; btn.disabled = true;
-      const r = await fetchDeepAnalysis(en, zh, '');
-      if (!r.success) { btn.textContent = (r.error || '失败'); btn.disabled = false; return; }
+      btn.textContent = '解析中...'; btn.disabled = true;
+
+      const r = await fetchCombinedAnalysis(en, zh, '');
+      if (!r.success) {
+        const errMsg = r.error || '失败';
+        btn.textContent = errMsg.length > 12 ? errMsg.slice(0, 12) + '…' : errMsg;
+        btn.disabled = false;
+        setTimeout(() => { if (document.getElementById('ifll-deep-btn')) btn.textContent = '重试'; }, 3000);
+        return;
+      }
       const d = r.data;
       let h = '';
       if (d.synonyms?.length) h += `<div class="ifll-tt-deep-row"><span class="ifll-tt-deep-tag">同义</span> ${d.synonyms.join(', ')}</div>`;
       if (d.antonyms?.length) h += `<div class="ifll-tt-deep-row"><span class="ifll-tt-deep-tag">反义</span> ${d.antonyms.join(', ')}</div>`;
       if (d.collocations?.length) h += `<div class="ifll-tt-deep-row"><span class="ifll-tt-deep-tag">搭配</span> ${d.collocations.join(', ')}</div>`;
       if (d.usage) h += `<div class="ifll-tt-deep-usage">${htmlEncode(d.usage)}</div>`;
-      if (d.examples?.length) {
-        h += '<div class="ifll-tt-divider"></div><div class="ifll-tt-label">示例</div>';
-        h += d.examples.map(ex => '<div class="ifll-tt-example ifll-tt-ai-example">' + htmlEncode(ex.en || '') + '</div>' + (ex.cn ? '<div class="ifll-tt-trans">' + renderBoldHtml(ex.cn) + '</div>' : '')).join('');
+      /* Examples from combined response */
+      const ex = r.examples || d.examples || [];
+      if (ex.length) {
+        h += '<div class="ifll-tt-divider"></div><div class="ifll-tt-label">例句</div>';
+        h += ex.map(e => '<div class="ifll-tt-example ifll-tt-ai-example">' + htmlEncode(e.en || '') + '</div>' + (e.cn ? '<div class="ifll-tt-trans">' + renderBoldHtml(e.cn) + '</div>' : '')).join('');
       }
       const area = document.getElementById('ifll-deep-area');
       const cachedNote = r.cached ? '<span class="ifll-tt-cached">cached</span>' : '';
       const regenBtnHtml = `<button class="ifll-btn-regen" id="ifll-deep-btn" title="重新生成">↻</button>`;
       if (area) area.innerHTML = '<div class="ifll-tt-deep-header">' + cachedNote + regenBtnHtml + '</div>' + (h || '<div class="ifll-tt-deep-empty">暂无数据</div>');
       /* Re-bind regen button */
-      document.getElementById('ifll-deep-btn')?.addEventListener('click', () => runDeepAnalysis(true));
+      document.getElementById('ifll-deep-btn')?.addEventListener('click', () => runCombinedAnalysis(true));
     }
     const deepBtn = document.getElementById('ifll-deep-btn');
-    if (deepBtn) deepBtn.addEventListener('click', () => runDeepAnalysis(false));
+    if (deepBtn) deepBtn.addEventListener('click', () => runCombinedAnalysis(false));
   }
 
   /* ---- Public API ---- */
@@ -925,7 +984,33 @@ const IFLL_INJECTOR = (() => {
         setupTooltipListeners();
       }
       /* AI buttons set up inside showTooltip */
+      /* Pre-cache combined analysis for today's daily words (idle) */
+      if (mode === 'replace' && s.apiKey) {
+        setTimeout(() => prefetchDailyWords(s), 3000);
+      }
     } catch (err) { console.warn('[IFLL] start error:', err); }
+  }
+
+  /* ── Pre-cache combined analysis for daily words ── */
+  async function prefetchDailyWords(s) {
+    try {
+      const dailyWords = await IFLL_STORAGE.ensureDailyWords();
+      if (!dailyWords?.length) return;
+      /* Pick up to 4 words that aren't cached yet */
+      const toFetch = [];
+      for (const w of dailyWords) {
+        if (toFetch.length >= 4) break;
+        const cached = await IFLL_STORAGE.getAiCacheEntry(w.en);
+        if (!cached?.deep || !cached?.examples?.length) toFetch.push(w);
+      }
+      for (const w of toFetch) {
+        try {
+          await fetchCombinedAnalysis(w.en, w.zh, '');
+          /* Small delay between requests to avoid rate limiting */
+          await new Promise(r => setTimeout(r, 600));
+        } catch (_) {}
+      }
+    } catch (_) {}
   }
 
   function destroy() {

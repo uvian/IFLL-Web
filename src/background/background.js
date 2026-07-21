@@ -28,6 +28,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handlers = {
     IFLL_AI_EXAMPLES: () => handleAiExamples(message.en, message.zh, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_AI_DEEP_ANALYSIS: () => handleDeepAnalysis(message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
+    IFLL_AI_COMBINED: () => handleCombinedAnalysis(message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_AI_TRANSLATE: () => handleAiTranslate(message.text, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_SEL_TOOLBAR: () => handleSelToolbar(message.action, message.text, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_CUSTOM_ACTION: () => handleCustomAction(message.action, message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
@@ -37,6 +38,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   };
   const fn = handlers[message.type];
   if (fn) { fn().then(sendResponse).catch(err => sendResponse({ error: err.message })); return true; }
+});
+
+/* ── Streaming port for combined analysis ── */
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'ifll-stream') return;
+  port.onMessage.addListener(async (msg) => {
+    if (msg.type !== 'IFLL_AI_COMBINED') return;
+    try {
+      await streamCombinedAnalysis(port, msg.en, msg.zh, msg.def, msg.apiKey, msg.apiEndpoint, msg.apiModel);
+    } catch (err) {
+      port.postMessage({ error: err.message });
+    } finally {
+      try { port.disconnect(); } catch (_) {}
+    }
+  });
 });
 
 /* ---- Shared fetch with timeout ---- */
@@ -88,6 +104,112 @@ function extractJson(text) {
     try { return JSON.parse(json.replace(/(?<=\s):\s*"([^"]*"|(?<=")\s*(?=[,}]))/g, ': "FIXED"')); } catch (_) {}
     return null;
   }
+}
+
+/* ── Optimised combined system prompt (compact, ~200 tokens) ── */
+const COMBINED_SYSTEM = `English lexicographer. Analyze the word, return ONLY JSON:
+{
+  "synonyms": ["can replace in ≥1 context, same meaning"],
+  "antonyms": ["genuine opposite, [] for nouns without antonyms"],
+  "collocations": ["authentic native phrase"],
+  "usage": "Chinese: formality, register, learner pitfalls (1-2 sentences)",
+  "examples": [
+    {"en": "natural B1-B2 sentence, different contexts", "cn": "地道中文，**词**加粗"},
+    ...3 total
+  ]
+}
+Accuracy > quantity. Rare words: 1-2 good items > 3-4 bad ones. No fabrication.`;
+
+/* ---- Combined analysis: deep analysis + examples in ONE call ---- */
+async function handleCombinedAnalysis(en, zh, def, apiKey, apiEndpoint, apiModel) {
+  if (!apiKey) return { error: 'no api key' };
+  try {
+    const resp = await apiFetch(apiEndpoint, '/chat/completions', {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + apiKey
+    }, {
+      model: apiModel || 'deepseek-v4-flash',
+      messages: [
+        { role: 'system', content: COMBINED_SYSTEM },
+        { role: 'user', content: `Word: "${en}" (${zh}${def ? ', ' + def : ''})` }
+      ],
+      temperature: 0.5, max_tokens: 1000
+    });
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => 'unknown');
+      return { error: `HTTP ${resp.status}: ${errText.substring(0, 150)}` };
+    }
+    const data = await resp.json();
+    const content = getContent(data);
+    if (!content) return { error: 'empty response' };
+    const parsed = extractJson(content);
+    if (!parsed) return { error: 'cannot parse AI response' };
+    return parsed;
+  } catch (err) { return { error: err.message }; }
+}
+
+/* ── Streaming combined analysis via Port ── */
+async function streamCombinedAnalysis(port, en, zh, def, apiKey, apiEndpoint, apiModel) {
+  if (!apiKey) { port.postMessage({ error: 'no api key' }); return; }
+  const baseUrl = (apiEndpoint || 'https://api.deepseek.com').replace(/\/+$/, '');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
+  try {
+    const resp = await fetch(baseUrl + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({
+        model: apiModel || 'deepseek-v4-flash',
+        messages: [
+          { role: 'system', content: COMBINED_SYSTEM },
+          { role: 'user', content: `Word: "${en}" (${zh}${def ? ', ' + def : ''})` }
+        ],
+        temperature: 0.5, max_tokens: 1000, stream: true
+      }),
+      signal: controller.signal
+    });
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => 'unknown');
+      port.postMessage({ error: `HTTP ${resp.status}: ${errText.substring(0, 150)}` });
+      return;
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      /* Parse SSE lines */
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';  // keep incomplete last line
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (!data || data === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(data);
+          const delta = parsed.choices?.[0]?.delta?.content;
+          if (delta) port.postMessage({ chunk: delta });
+        } catch (_) {}
+      }
+    }
+    /* Flush remaining buffer */
+    if (buffer.startsWith('data: ') && buffer.slice(6).trim() !== '[DONE]') {
+      try {
+        const parsed = JSON.parse(buffer.slice(6).trim());
+        const delta = parsed.choices?.[0]?.delta?.content;
+        if (delta) port.postMessage({ chunk: delta });
+      } catch (_) {}
+    }
+    port.postMessage({ done: true });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      port.postMessage({ error: '请求超时，请重试' });
+    } else {
+      port.postMessage({ error: err.message });
+    }
+  } finally { clearTimeout(timer); }
 }
 
 /* ---- Generate example sentences ---- */

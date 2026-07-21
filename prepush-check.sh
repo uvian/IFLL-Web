@@ -35,8 +35,7 @@ check "grep -q 'IFLL_LIST_MODELS' src/background/background.js" "listModels hand
 check "grep -q 'apiEndpoint' src/popup/popup.html" "API endpoint select"
 check "grep -q 'refreshModels' src/popup/popup.js" "refresh models button"
 check "grep -q 'modeSelector' src/popup/popup.html" "mode selector"
-check "grep -q 'fetchDeepAnalysis' src/lib/injector.js" "deep analysis"
-check "grep -q 'fetchAiExamples' src/lib/injector.js" "AI examples"
+check "grep -q 'fetchCombinedAnalysis' src/lib/injector.js" "combined analysis"
 check "grep -q 'onInstalled' src/background/background.js" "onInstalled handler"
 
 # 7. Default model is deepseek-v4-flash (not deepseek-chat)

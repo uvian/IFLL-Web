@@ -370,6 +370,11 @@
 
 .ifll-tt-cached { font-size: 10px; color: #9E9890; padding: 2px 14px 6px 14px; font-style: italic; }
 
+/* Streaming live typing cursor */
+.ifll-tt-deep-streaming { padding: 8px 14px; font-size: 13px; color: #6B6560; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.ifll-tt-cursor { display: inline; animation: ifll-blink 1s step-end infinite; color: #2E5090; }
+@keyframes ifll-blink { 50% { opacity: 0; } }
+
 @keyframes ifll-fade-up {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
