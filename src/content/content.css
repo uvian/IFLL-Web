@@ -558,3 +558,49 @@
 .ifll-tooltip.ifll-dark .ifll-btn-r1 { border-color: #4A2828; color: #E88B8B; }
 .ifll-tooltip.ifll-dark .ifll-btn-r1:hover { background: #2A1A1A; }
 .ifll-tt-ai { padding: 4px 14px; }
+
+/* ── Regenerate button (circular arrow) ── */
+.ifll-tt-deep-header {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.ifll-btn-regen {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid #D6D0C8;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s;
+  padding: 0;
+}
+.ifll-btn-regen::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #8A8580;
+  border-top-color: transparent;
+  border-right-color: transparent;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+.ifll-btn-regen:hover {
+  border-color: #2E5090;
+  background: #F0EEF5;
+}
+.ifll-btn-regen:hover::after {
+  border-left-color: #2E5090;
+  border-bottom-color: #2E5090;
+}
+
+.ifll-tooltip.ifll-dark .ifll-btn-regen { border-color: #3A3632; }
+.ifll-tooltip.ifll-dark .ifll-btn-regen::after { border-left-color: #8A8580; border-bottom-color: #8A8580; }
+.ifll-tooltip.ifll-dark .ifll-btn-regen:hover { border-color: #7B9FD4; background: #22283A; }
+.ifll-tooltip.ifll-dark .ifll-btn-regen:hover::after { border-left-color: #7B9FD4; border-bottom-color: #7B9FD4; }

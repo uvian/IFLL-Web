@@ -62,19 +62,34 @@ function getContent(data) {
   return msg?.content || msg?.reasoning_content || '';
 }
 
-/* ---- Robust JSON extraction ---- */
+/* ---- Robust JSON extraction (handles markdown, trailing commas, mixed text) ---- */
 function extractJson(text) {
-  text = text.replace(/```[\s\S]*?```/g, m => m.replace(/```(?:json)?\s*/, '').replace(/\s*```$/, ''));
-  try { return JSON.parse(text); } catch (_) {}
-  const start = text.indexOf('{');
+  if (!text) return null;
+  /* Strip markdown code fences */
+  let cleaned = text.replace(/```\w*\s*[\s\S]*?```/g, '');  // remove fenced blocks entirely
+  cleaned = cleaned.replace(/```\w*\n?/g, '');               // stray fence markers
+  /* Find outermost JSON object */
+  const start = cleaned.indexOf('{');
   if (start < 0) return null;
-  let depth = 0, end = -1;
-  for (let i = start; i < text.length; i++) {
-    if (text[i] === '{') depth++;
-    if (text[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+  let depth = 0, end = -1, inString = false, escaped = false;
+  for (let i = start; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (escaped) { escaped = false; continue; }
+    if (ch === '\\') { escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    if (ch === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
   }
-  if (end > start) { try { return JSON.parse(text.slice(start, end)); } catch (_) {} }
-  return null;
+  if (end <= start) return null;
+  let json = cleaned.slice(start, end);
+  /* Remove trailing commas (invalid JSON, model artifact) */
+  json = json.replace(/,(\s*[}\]])/g, '$1');
+  try { return JSON.parse(json); } catch (e1) {
+    /* Try fixing unescaped quotes */
+    try { return JSON.parse(json.replace(/(?<=\s):\s*"([^"]*"|(?<=")\s*(?=[,}]))/g, ': "FIXED"')); } catch (_) {}
+    return null;
+  }
 }
 
 /* ---- Generate example sentences ---- */

@@ -555,10 +555,14 @@ const IFLL_INJECTOR = (() => {
         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout (20s)')), 20000))
       ]);
       if (!result || result.error) return { error: (result && result.error) || 'no response' };
-      /* Save to cache (permanent) */
-      const entry = cacheEntry || {};
-      entry.deep = result; entry.deepCachedAt = Date.now();
-      await IFLL_STORAGE.setAiCacheEntry(en, entry);
+      /* Only cache if the result has at least one useful field — don't cache empty data */
+      const hasData = result.synonyms?.length || result.antonyms?.length ||
+                      result.collocations?.length || result.usage || result.examples?.length;
+      if (hasData) {
+        const entry = cacheEntry || {};
+        entry.deep = result; entry.deepCachedAt = Date.now();
+        await IFLL_STORAGE.setAiCacheEntry(en, entry);
+      }
       return { success: true, data: result };
     } catch (err) { return { error: err.message }; }
   }
@@ -741,10 +745,14 @@ const IFLL_INJECTOR = (() => {
     if (deepBtn) deepBtn.addEventListener('click', async () => {
       if (!tooltipEl) return;
       const s = await IFLL_STORAGE.get();
-      if (!s.apiKey) { deepBtn.textContent = '⚠️ 无 API Key'; return; }
-      deepBtn.textContent = '⏳ 分析中...'; deepBtn.disabled = true;
-      const r = await fetchDeepAnalysis(tooltipEl.dataset.en, tooltipEl.dataset.zh, '');
-      if (!r.success) { deepBtn.textContent = '⚠️ ' + (r.error || '失败'); deepBtn.disabled = false; return; }
+      if (!s.apiKey) { deepBtn.textContent = '无 API Key'; return; }
+      const en = tooltipEl.dataset.en, zh = tooltipEl.dataset.zh;
+      const isRegen = deepBtn.dataset.regen === '1';
+      if (isRegen) await IFLL_STORAGE.clearAiCache(en);
+      deepBtn.textContent = '分析中...'; deepBtn.disabled = true;
+      delete deepBtn.dataset.regen;
+      const r = await fetchDeepAnalysis(en, zh, '');
+      if (!r.success) { deepBtn.textContent = (r.error || '失败'); deepBtn.disabled = false; return; }
       const d = r.data;
       let h = '';
       if (d.synonyms?.length) h += `<div class="ifll-tt-deep-row"><span class="ifll-tt-deep-tag">同义</span> ${d.synonyms.join(', ')}</div>`;
@@ -756,7 +764,11 @@ const IFLL_INJECTOR = (() => {
         h += d.examples.map(ex => '<div class="ifll-tt-example ifll-tt-ai-example">' + htmlEncode(ex.en || '') + '</div>' + (ex.cn ? '<div class="ifll-tt-trans">' + renderBoldHtml(ex.cn) + '</div>' : '')).join('');
       }
       const area = document.getElementById('ifll-deep-area');
-      if (area) area.innerHTML = (h || '<div class="ifll-tt-deep-empty">暂无数据</div>') + (r.cached ? '<div class="ifll-tt-cached">cached</div>' : '');
+      const cachedNote = r.cached ? '<span class="ifll-tt-cached">cached</span>' : '';
+      const regenBtn = `<button data-action=\"deep-analyze\" class=\"ifll-btn-regen\" id=\"ifll-deep-btn\" data-regen=\"1\" title=\"重新生成\"></button>`;
+      if (area) area.innerHTML = '<div class="ifll-tt-deep-header">' + cachedNote + regenBtn + '</div>' + (h || '<div class="ifll-tt-deep-empty">暂无数据</div>');
+      /* Re-bind click for the new regenerate button (always present) */
+      document.getElementById('ifll-deep-btn')?.addEventListener('click', () => deepBtn.click());
     });
   }
 

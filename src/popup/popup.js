@@ -63,7 +63,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('statReplace').textContent = ds.replace || 0;
   document.getElementById('statAnnotate').textContent = ds.annotate || 0;
   document.getElementById('statTranslate').textContent = ds.translate || 0;
-  document.getElementById('statMinutes').textContent = Math.round((ds.minutes || 0) / 60000);
+  document.getElementById('statMinutes').textContent = Math.round((ds.minutes || 0) / 60000) || 0;
+  /* Word bank stats */
+  document.getElementById('statWordbank').textContent = WORD_BANK.length;
+  document.getElementById('statIpa').textContent = Math.round(WORD_BANK.filter(w => w.ipa).length / WORD_BANK.length * 100) + '%';
+  document.getElementById('statKnown').textContent = (settings.knownWords || []).length;
+  document.getElementById('statReview').textContent = (settings.reviewQueue || []).length;
 
   /* ── Excluded sites ── */
   async function renderExcluded() {
