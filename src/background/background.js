@@ -64,12 +64,14 @@ function extractJson(text) {
   if (!text) return null;
   let cleaned = text;
 
-  /* Strategy 1: try extracting from markdown code blocks first (model sometimes wraps JSON in ```json) */
-  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenceMatch) cleaned = fenceMatch[1];
-
-  /* Strategy 2: strip stray fence markers, blank lines, leading/trailing whitespace */
-  cleaned = cleaned.replace(/```\w*\n?/g, '').trim();
+  /* If response is wrapped in a markdown code fence, extract the JSON inside */
+  const fence = cleaned.match(/```(?:\w+)?\s*\n?([\s\S]*?)```/);
+  if (fence) {
+    cleaned = fence[1].trim();
+  } else {
+    /* Otherwise just strip any stray fence markers */
+    cleaned = cleaned.replace(/```\w*\n?/g, '').trim();
+  }
 
   /* Find outermost JSON object */
   const start = cleaned.indexOf('{');
@@ -85,7 +87,7 @@ function extractJson(text) {
     if (ch === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
   }
   if (end <= start) {
-    /* Strategy 3: unmatched braces — try auto-closing */
+    /* Auto-close unmatched braces (up to 3 missing) */
     let json = cleaned.slice(start);
     const missing = (json.match(/{/g) || []).length - (json.match(/}/g) || []).length;
     if (missing > 0 && missing <= 3) {
@@ -96,12 +98,11 @@ function extractJson(text) {
     return null;
   }
   let json = cleaned.slice(start, end);
-  /* Remove trailing commas (invalid JSON, model artifact) */
   json = json.replace(/,(\s*[}\]])/g, '$1');
   try { return JSON.parse(json); } catch (e1) {
-    /* Strategy 4: fix unescaped quotes inside string values */
+    /* Fix unescaped quotes in string values */
     try { return JSON.parse(json.replace(/(?<=\s):\s*"([^"]*"|(?<=")\s*(?=[,}]))/g, ': "FIXED"')); } catch (_) {}
-    /* Strategy 5: fix unescaped newlines in strings (replace with space) */
+    /* Fix unescaped newlines in string values */
     try { return JSON.parse(json.replace(/(?<=":\s*"[^"]*)\n(?=[^"]*")/g, ' ')); } catch (_) {}
     return null;
   }
