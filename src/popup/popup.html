@@ -121,6 +121,26 @@
     <div class="p-excluded-list" id="excludedList"></div>
   </div>
 
+  <!-- Custom AI actions -->
+  <details class="p-api">
+    <summary>自定义 AI 动作</summary>
+    <p class="p-api-hint">自定义提示词模板。{word} {zh} {def} 为占位符。</p>
+    <div id="customActionsList" class="p-actions-list"></div>
+    <div class="p-batch-row" style="margin-top:6px">
+      <input type="text" id="actName" class="p-input p-input-sm" placeholder="动作名称" style="flex:1">
+      <button id="actAdd" class="p-btn p-btn-sm">+ 添加</button>
+    </div>
+    <div id="actEditor" style="display:none;margin-top:6px">
+      <textarea id="actPrompt" class="p-textarea" rows="3" placeholder="提示词模板，如: 用简单中文解释 {word}" style="width:100%;margin-top:2px"></textarea>
+      <input type="text" id="actFields" class="p-input" placeholder="输出字段(逗号分隔，如: synonyms,usage)" style="width:100%;margin-top:4px">
+      <div class="p-batch-row" style="margin-top:4px">
+        <button id="actSave" class="p-btn p-btn-sm">保存</button>
+        <button id="actDel" class="p-btn p-btn-sm p-btn-ghost">删除</button>
+        <span id="actEditId" style="display:none"></span>
+      </div>
+    </div>
+  </details>
+
   <!-- API settings -->
   <details class="p-api">
     <summary>API 设置</summary>

@@ -32,6 +32,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   IFLL_BATCH_DEEP: () => handleBatchDeep(message.words, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_AI_PDF_TRANSLATE: () => handleAiTranslate(message.text, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_TEST_API: () => testApiConnection(message.apiKey, message.apiEndpoint, message.apiModel),
+    IFLL_CUSTOM_ACTION: () => handleCustomAction(message.action, message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_LIST_MODELS: () => listModels(message.apiKey, message.apiEndpoint),
     IFLL_OPEN_PDF: () => {
       const dest = message.url ? `src/pdf/pdf.html?url=${encodeURIComponent(message.url)}` : 'src/pdf/pdf.html';
@@ -243,6 +244,105 @@ async function listModels(apiKey, apiEndpoint) {
     const data = await resp.json();
     return { models: (data.data || []).map(m => m.id).sort() };
   } catch (err) { return { error: err.message }; }
+}
+
+
+/* ---- Batch deep analysis: process N words in one API call ---- */
+async function handleBatchDeep(words, apiKey, apiEndpoint, apiModel) {
+  if (!apiKey || !words?.length) return { error: words ? 'no api key' : 'no words' };
+  try {
+    const wordList = words.map(w => '"' + w.en + '" (' + w.zh + ')').join(', ');
+    const prompt = 'Analyze each word. Return ONLY: {"results":[{"word":"...","synonyms":["s"],"antonyms":[],"collocations":[],"usage":"Chinese note","examples":[{"en":"ex","cn":"**w** trans"}]}]}. Empty arrays OK.';
+    const resp = await apiFetch(apiEndpoint, '/chat/completions', {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + apiKey
+    }, {
+      model: apiModel || 'deepseek-v4-flash',
+      messages: [{ role: 'system', content: prompt }, { role: 'user', content: 'Words: ' + wordList }],
+      max_tokens: 3000, temperature: 0.4
+    });
+    if (!resp.ok) return { error: 'HTTP ' + resp.status };
+    const dt = await resp.json();
+    const ct = getContent(dt);
+    if (!ct) return { error: 'empty response' };
+    const p = extractJson(ct);
+    return p?.results ? { results: p.results } : { error: 'cannot parse' };
+  } catch (e) { return { error: e.message }; }
+}
+
+
+/* ---- Batch deep analysis: process N words in one API call ---- */
+async function handleBatchDeep(words, apiKey, apiEndpoint, apiModel) {
+  if (!apiKey || !words?.length) return { error: words ? 'no api key' : 'no words' };
+  try {
+    const wordList = words.map(w => '"' + w.en + '" (' + w.zh + ')').join(', ');
+    const prompt = 'Analyze each word. Return ONLY: {"results":[{"word":"...","synonyms":["s"],"antonyms":[],"collocations":[],"usage":"Chinese note","examples":[{"en":"ex","cn":"**w** trans"}]}]}. Empty arrays OK.';
+    const resp = await apiFetch(apiEndpoint, '/chat/completions', {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + apiKey
+    }, {
+      model: apiModel || 'deepseek-v4-flash',
+      messages: [{ role: 'system', content: prompt }, { role: 'user', content: 'Words: ' + wordList }],
+      max_tokens: 3000, temperature: 0.4
+    });
+    if (!resp.ok) return { error: 'HTTP ' + resp.status };
+    const dt = await resp.json();
+    const ct = getContent(dt);
+    if (!ct) return { error: 'empty response' };
+    const p = extractJson(ct);
+    return p?.results ? { results: p.results } : { error: 'cannot parse' };
+  } catch (e) { return { error: e.message }; }
+}
+
+
+/* ---- Batch deep analysis: process N words in one API call ---- */
+async function handleBatchDeep(words, apiKey, apiEndpoint, apiModel) {
+  if (!apiKey || !words?.length) return { error: words ? 'no api key' : 'no words' };
+  try {
+    const wordList = words.map(w => '"' + w.en + '" (' + w.zh + ')').join(', ');
+    const prompt = 'Analyze each word. Return ONLY: {"results":[{"word":"...","synonyms":["s"],"antonyms":[],"collocations":[],"usage":"Chinese note","examples":[{"en":"ex","cn":"**w** trans"}]}]}. Empty arrays OK.';
+    const resp = await apiFetch(apiEndpoint, '/chat/completions', {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + apiKey
+    }, {
+      model: apiModel || 'deepseek-v4-flash',
+      messages: [{ role: 'system', content: prompt }, { role: 'user', content: 'Words: ' + wordList }],
+      max_tokens: 3000, temperature: 0.4
+    });
+    if (!resp.ok) return { error: 'HTTP ' + resp.status };
+    const dt = await resp.json();
+    const ct = getContent(dt);
+    if (!ct) return { error: 'empty response' };
+    const p = extractJson(ct);
+    return p?.results ? { results: p.results } : { error: 'cannot parse' };
+  } catch (e) { return { error: e.message }; }
+}
+
+/* ---- Custom AI action (user-defined prompt) ---- */
+async function handleCustomAction(action, en, zh, def, apiKey, apiEndpoint, apiModel) {
+  if (!apiKey) return { error: 'no api key' };
+  try {
+    let prompt = action.prompt || '{word}';
+    prompt = prompt.replace(/{word}/g, en).replace(/{zh}/g, zh).replace(/{def}/g, def);
+    const fields = action.fields || [];
+    const fmt = fields.length
+      ? ' Return ONLY JSON: {' + fields.map(f => `&quot;${f}&quot;: &quot;...&quot;`).join(', ') + '}. No markdown.'
+      : ' Return the result as concise plain text. No markdown.';
+    const resp = await apiFetch(apiEndpoint, '/chat/completions', {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + apiKey
+    }, {
+      model: apiModel || 'deepseek-v4-flash',
+      messages: [{ role: 'system', content: prompt + fmt }, { role: 'user', content: en + (zh ? ' (' + zh + ')' : '') }],
+      max_tokens: 600, temperature: 0.5
+    });
+    if (!resp.ok) return { error: 'HTTP ' + resp.status };
+    const data = await resp.json();
+    const content = getContent(data);
+    if (!content) return { error: 'empty response' };
+    const parsed = extractJson(content);
+    return parsed ? parsed : { text: content };
+  } catch (e) { return { error: e.message }; }
 }
 
 /* ---- Selection toolbar: translate or explain selected text ---- */

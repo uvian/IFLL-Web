@@ -370,3 +370,7 @@ body {
 .p-footer-privacy span { font-size: 11px; color: #A09A94; }
 .p-footer-privacy a { font-size: 11px; color: #2E5090; text-decoration: none; }
 .p-footer-privacy a:hover { text-decoration: underline; }
+
+/* ── Custom actions list ── */
+.p-action-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid #F0EDE8; }
+.p-action-item span { font-size: 12px; color: #4A453F; }

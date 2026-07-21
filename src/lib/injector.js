@@ -649,6 +649,14 @@ const IFLL_INJECTOR = (() => {
 
     html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">深度解析</div>`;
     html += `<div class="ifll-tt-deep" id="ifll-deep-area"><button data-action="deep-analyze" class="ifll-btn-ai" id="ifll-deep-btn">点击生成</button></div>`;
+    /* Custom AI action buttons */
+    const sCfg = await IFLL_STORAGE.get();
+    const acts = sCfg.customActions || [];
+    if (acts.length) {
+      html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">自定义</div><div class="ifll-tt-custom" id="ifll-custom-area">`;
+      acts.forEach(a => html += `<button class="ifll-btn-custom" data-action-id="${a.id}">${a.name}</button>`);
+      html += `</div>`;
+    }
     html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">AI 例句</div>`;
     html += `<div class="ifll-tt-ai" id="ifll-ai-area"><button data-action="ai-examples" class="ifll-btn-ai" id="ifll-ai-btn">生成更多例句</button></div>`;
     html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-actions">
@@ -725,6 +733,42 @@ const IFLL_INJECTOR = (() => {
 
   /* ---- AI button handlers ---- */
   function setupAiButtons() {
+    /* Custom action buttons */
+    document.querySelectorAll('.ifll-btn-custom').forEach(btn => {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', async () => {
+        const acts = (await IFLL_STORAGE.get()).customActions || [];
+        const act = acts.find(a => a.id === btn.dataset.actionId);
+        if (!act) return;
+        btn.textContent = '...'; btn.disabled = true;
+        try {
+          const r = await chrome.runtime.sendMessage({
+            type: 'IFLL_CUSTOM_ACTION',
+            action: { prompt: act.prompt, fields: act.fields },
+            en: tooltipEl.dataset.en, zh: tooltipEl.dataset.zh, def: '',
+            apiKey: (await IFLL_STORAGE.get()).apiKey,
+            apiEndpoint: (await IFLL_STORAGE.get()).apiEndpoint,
+            apiModel: (await IFLL_STORAGE.get()).apiModel
+          });
+          if (!r || r.error) { btn.textContent = r?.error || '失败'; setTimeout(() => btn.textContent = act.name, 2000); btn.disabled = false; return; }
+          /* Render result in tooltip */
+          const area = document.getElementById('ifll-custom-area');
+          if (area) {
+            let h = '';
+            if (r.text) h += `<div class="ifll-tt-deep-usage">${htmlEncode(r.text)}</div>`;
+            for (const [key, val] of Object.entries(r)) {
+              if (key === 'text') continue;
+              if (Array.isArray(val) && val.length) h += `<div class="ifll-tt-deep-row"><span class="ifll-tt-deep-tag">${key}</span> ${val.join(', ')}</div>`;
+              else if (typeof val === 'string' && val) h += `<div class="ifll-tt-deep-usage">${htmlEncode(val)}</div>`;
+            }
+            area.innerHTML = h || '<div class="ifll-tt-deep-empty">无结果</div>';
+          }
+        } catch (e) { btn.textContent = '错误'; setTimeout(() => btn.textContent = act.name, 2000); }
+        btn.disabled = false;
+      });
+    });
+
     /* Copy buttons on AI/Deep examples */
     document.querySelectorAll('.ifll-tt-example').forEach(el => {
       if (!el.querySelector('.ifll-btn-copy')) {
