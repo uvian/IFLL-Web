@@ -26,6 +26,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handlers = {
+    IFLL_AI_COMBINED: () => handleCombinedAnalysis(message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_AI_TRANSLATE: () => handleAiTranslate(message.text, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_SEL_TOOLBAR: () => handleSelToolbar(message.action, message.text, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_CUSTOM_ACTION: () => handleCustomAction(message.action, message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
@@ -104,6 +105,48 @@ function extractJson(text) {
     try { return JSON.parse(json.replace(/(?<=":\s*"[^"]*)\n(?=[^"]*")/g, ' ')); } catch (_) {}
     return null;
   }
+}
+
+/* ── Optimised combined system prompt ── */
+const COMBINED_SYSTEM = `English lexicographer. Analyze the word, return ONLY JSON:
+{
+  "synonyms": ["can replace in ≥1 context, same meaning"],
+  "antonyms": ["genuine opposite, [] for nouns without antonyms"],
+  "collocations": ["authentic native phrase"],
+  "usage": "Chinese: formality, register, learner pitfalls (1-2 sentences)",
+  "examples": [
+    {"en": "natural B1-B2 sentence, different contexts", "cn": "地道中文，**词**加粗"},
+    ...3 total
+  ]
+}
+Accuracy > quantity. Rare words: 1-2 good items > 3-4 bad ones. No fabrication.`;
+
+/* ---- Combined analysis: deep analysis + examples in ONE call ---- */
+async function handleCombinedAnalysis(en, zh, def, apiKey, apiEndpoint, apiModel) {
+  if (!apiKey) return { error: 'no api key' };
+  try {
+    const resp = await apiFetch(apiEndpoint, '/chat/completions', {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + apiKey
+    }, {
+      model: apiModel || 'deepseek-v4-flash',
+      messages: [
+        { role: 'system', content: COMBINED_SYSTEM },
+        { role: 'user', content: `Word: "${en}" (${zh}${def ? ', ' + def : ''})` }
+      ],
+      temperature: 0.5, max_tokens: 600
+    });
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => 'unknown');
+      return { error: `HTTP ${resp.status}: ${errText.substring(0, 150)}` };
+    }
+    const data = await resp.json();
+    const content = getContent(data);
+    if (!content) return { error: 'empty response' };
+    const parsed = extractJson(content);
+    if (!parsed) return { error: 'cannot parse AI response' };
+    return parsed;
+  } catch (err) { return { error: err.message }; }
 }
 
 /* ---- Generate example sentences ---- */

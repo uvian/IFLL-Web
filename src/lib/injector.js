@@ -543,36 +543,7 @@ const IFLL_INJECTOR = (() => {
     return result;
   }
 
-  /* ── Optimised combined system prompt (same as SW copy) ── */
-  const COMBINED_SYSTEM = 'English lexicographer. Analyze the word, return ONLY JSON:\n' +
-    '{\n  "synonyms": ["can replace in ≥1 context, same meaning"],\n' +
-    '  "antonyms": ["genuine opposite, [] for nouns without antonyms"],\n' +
-    '  "collocations": ["authentic native phrase"],\n' +
-    '  "usage": "Chinese: formality, register, learner pitfalls (1-2 sentences)",\n' +
-    '  "examples": [\n    {"en": "natural B1-B2 sentence, different contexts", "cn": "地道中文，**词**加粗"},\n' +
-    '    ...3 total\n  ]\n}\nAccuracy > quantity. Rare words: 1-2 good items > 3-4 bad ones. No fabrication.';
-
-  /* ── Direct API fetch (content script → API, no SW round-trip) ── */
-  async function apiFetchDirect(endpoint, apiKey, body, stream = false) {
-    const baseUrl = (endpoint || 'https://api.deepseek.com').replace(/\/+$/, '');
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
-    try {
-      return await fetch(baseUrl + '/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-        body: JSON.stringify({ ...body, stream }),
-        signal: controller.signal
-      });
-    } finally { clearTimeout(timer); }
-  }
-
-  function getContentLocal(data) {
-    const msg = data.choices?.[0]?.message;
-    return msg?.content || msg?.reasoning_content || '';
-  }
-
-  /* ── Combined analysis: direct fetch (no SW, no kill window) ── */
+  /* ── Combined analysis via SW (content script fetch blocked by page CSP) ── */
   async function fetchCombinedAnalysis(en, zh, def) {
     /* Check cache first */
     const cacheEntry = await IFLL_STORAGE.getAiCacheEntry(en);
@@ -582,43 +553,24 @@ const IFLL_INJECTOR = (() => {
     const s = await IFLL_STORAGE.get();
     if (!s.apiKey) return { error: 'no api key' };
 
-    /* Try streaming first, fall back to non-streaming */
     let result = null;
-    try { result = await fetchStreamDirect(en, zh, def, s); } catch (_) {}
-    if (result?.success) return result;
-
-    /* Non-streaming direct fetch with retry */
-    const body = {
-      model: s.apiModel || 'deepseek-v4-flash',
-      messages: [
-        { role: 'system', content: COMBINED_SYSTEM },
-        { role: 'user', content: `Word: "${en}" (${zh}${def ? ', ' + def : ''})` }
-      ],
-      temperature: 0.5, max_tokens: 600
-    };
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const resp = await apiFetchDirect(s.apiEndpoint, s.apiKey, body);
-        if (!resp.ok) {
-          const errText = await resp.text().catch(() => 'unknown');
-          result = { error: `HTTP ${resp.status}: ${errText.substring(0, 150)}` };
-          continue;
-        }
-        const data = await resp.json();
-        const content = getContentLocal(data);
-        if (!content) { result = { error: 'empty response' }; continue; }
-        const parsed = extractJsonLocal(content);
-        if (!parsed) { result = { error: 'cannot parse AI response' }; continue; }
-        result = parsed;
-        break;
+        result = await Promise.race([
+          chrome.runtime.sendMessage({
+            type: 'IFLL_AI_COMBINED', en, zh, def,
+            apiKey: s.apiKey, apiEndpoint: s.apiEndpoint, apiModel: s.apiModel
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout (12s)')), 12000))
+        ]);
+        if (result && !result.error) break;
       } catch (err) {
         result = { error: err.message };
-        if (!err.message?.includes('timeout') && !err.message?.includes('network')) break;
+        if (!err.message?.includes('timeout') && !err.message?.includes('Extension context')) break;
       }
     }
     if (!result || result.error) return { error: (result && result.error) || 'no response' };
 
-    /* Cache if useful data present */
     const hasData = result.synonyms?.length || result.antonyms?.length ||
                     result.collocations?.length || result.usage || result.examples?.length;
     if (hasData) {
@@ -630,99 +582,6 @@ const IFLL_INJECTOR = (() => {
       await IFLL_STORAGE.setAiCacheEntry(en, entry);
     }
     return { success: true, data: result, examples: result.examples || [] };
-  }
-
-  /* ── Direct streaming fetch (no Port, no SW) ── */
-  async function fetchStreamDirect(en, zh, def, s) {
-    const body = {
-      model: s.apiModel || 'deepseek-v4-flash',
-      messages: [
-        { role: 'system', content: COMBINED_SYSTEM },
-        { role: 'user', content: `Word: "${en}" (${zh}${def ? ', ' + def : ''})` }
-      ],
-      temperature: 0.5, max_tokens: 600
-    };
-    const resp = await apiFetchDirect(s.apiEndpoint, s.apiKey, body, true);
-    if (!resp.ok) {
-      const errText = await resp.text().catch(() => 'unknown');
-      throw new Error(`HTTP ${resp.status}: ${errText.substring(0, 100)}`);
-    }
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '', accumulated = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6).trim();
-        if (!data || data === '[DONE]') continue;
-        try {
-          const parsed = JSON.parse(data);
-          const delta = parsed.choices?.[0]?.delta?.content;
-          if (delta) { accumulated += delta; renderStreamChunk(accumulated); }
-        } catch (_) {}
-      }
-    }
-    /* Flush remaining */
-    if (buffer.startsWith('data: ') && buffer.slice(6).trim() !== '[DONE]') {
-      try {
-        const p = JSON.parse(buffer.slice(6).trim());
-        const d = p.choices?.[0]?.delta?.content;
-        if (d) accumulated += d;
-      } catch (_) {}
-    }
-    const parsed = extractJsonLocal(accumulated);
-    if (parsed) return { success: true, data: parsed, examples: parsed.examples || [], streaming: true };
-    throw new Error('cannot parse stream');
-  }
-
-  function extractJsonLocal(text) {
-    if (!text) return null;
-    let cleaned = text;
-    const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fenceMatch) cleaned = fenceMatch[1];
-    cleaned = cleaned.replace(/```\w*\n?/g, '').trim();
-    const start = cleaned.indexOf('{');
-    if (start < 0) return null;
-    let depth = 0, end = -1, inString = false, escaped = false;
-    for (let i = start; i < cleaned.length; i++) {
-      const ch = cleaned[i];
-      if (escaped) { escaped = false; continue; }
-      if (ch === '\\') { escaped = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
-      if (inString) continue;
-      if (ch === '{') depth++;
-      if (ch === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
-    }
-    if (end <= start) {
-      let json = cleaned.slice(start);
-      const missing = (json.match(/{/g) || []).length - (json.match(/}/g) || []).length;
-      if (missing > 0 && missing <= 3) {
-        json += '}'.repeat(missing);
-        json = json.replace(/,(\s*[}\]])/g, '$1');
-        try { return JSON.parse(json); } catch (_) {}
-      }
-      return null;
-    }
-    let json = cleaned.slice(start, end);
-    json = json.replace(/,(\s*[}\]])/g, '$1');
-    try { return JSON.parse(json); } catch (e1) {
-      try { return JSON.parse(json.replace(/(?<=\s):\s*"([^"]*"|(?<=")\s*(?=[,}]))/g, ': "FIXED"')); } catch (_) {}
-      try { return JSON.parse(json.replace(/(?<=":\s*"[^"]*)\n(?=[^"]*")/g, ' ')); } catch (_) {}
-      return null;
-    }
-  }
-
-  /* ── Incremental render for streaming response ── */
-  function renderStreamChunk(text) {
-    const area = document.getElementById('ifll-deep-area');
-    if (!area) return;
-    const preview = text.length > 200 ? text.slice(-200) : text;
-    area.innerHTML = `<div class="ifll-tt-deep-streaming">${htmlEncode(preview).replace(/\n/g, '<br>')}<span class="ifll-tt-cursor">▌</span></div>`;
   }
 
   async function showTooltip(e) {
