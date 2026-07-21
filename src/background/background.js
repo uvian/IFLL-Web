@@ -56,6 +56,12 @@ async function apiFetch(endpoint, path, headers, body) {
   } finally { clearTimeout(timer); }
 }
 
+/* ---- Extract content from API response (handles reasoning models) ---- */
+function getContent(data) {
+  const msg = data.choices?.[0]?.message;
+  return msg?.content || msg?.reasoning_content || '';
+}
+
 /* ---- Robust JSON extraction ---- */
 function extractJson(text) {
   text = text.replace(/```[\s\S]*?```/g, m => m.replace(/```(?:json)?\s*/, '').replace(/\s*```$/, ''));
@@ -91,7 +97,7 @@ async function handleAiExamples(en, zh, apiKey, apiEndpoint, apiModel) {
       return { error: `HTTP ${resp.status}: ${errText.substring(0, 150)}` };
     }
     const data = await resp.json();
-    const content = data.choices?.[0]?.message?.content;
+    const content = getContent(data);
     if (!content) return { error: 'empty response' };
     const parsed = extractJson(content);
     if (!parsed) return { error: 'cannot parse AI response' };
@@ -120,7 +126,7 @@ async function handleDeepAnalysis(en, zh, def, apiKey, apiEndpoint, apiModel) {
       return { error: `HTTP ${resp.status}: ${errText.substring(0, 150)}` };
     }
     const data = await resp.json();
-    const content = data.choices?.[0]?.message?.content;
+    const content = getContent(data);
     if (!content) return { error: 'empty response' };
     const parsed = extractJson(content);
     if (!parsed) return { error: 'cannot parse AI response' };
@@ -149,7 +155,7 @@ async function handleAiTranslate(text, apiKey, apiEndpoint, apiModel) {
       return { error: `HTTP ${resp.status}: ${errText.substring(0, 150)}` };
     }
     const data = await resp.json();
-    const content = data.choices?.[0]?.message?.content;
+    const content = getContent(data);
     if (!content) return { error: 'empty response' };
     const parsed = extractJson(content);
     if (!parsed || !parsed.translation) return { error: 'cannot parse translation' };
