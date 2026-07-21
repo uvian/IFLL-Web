@@ -87,7 +87,17 @@ async function handleAiExamples(en, zh, apiKey, apiEndpoint, apiModel) {
     }, {
       model: apiModel || 'deepseek-v4-flash',
       messages: [
-        { role: 'system', content: 'You are a language tutor. Generate 3 natural, everyday English example sentences for the given word. Return ONLY valid JSON: {"examples":[{"en":"sentence","cn":"translation with **word** bolded"}]}' },
+        { role: 'system', content: `You are an English teacher for Chinese-speaking learners (intermediate level). Your job is to generate example sentences that help the learner internalize a specific English word.
+
+Requirements:
+- Generate 3 example sentences using the given word in DIFFERENT contexts (different meanings or collocations if applicable).
+- Each sentence must sound NATURAL — something a native speaker would actually say in daily conversation, not a dictionary-style fabricated sentence.
+- Keep sentence difficulty at intermediate level (B1-B2). Avoid overly complex structures or rare vocabulary.
+- Chinese translations must be natural, idiomatic Chinese (地道中文), NOT word-for-word literal translation.
+- In the Chinese translation, wrap the translated target word in **double asterisks** so the learner can see where it appears.
+- Return ONLY a valid JSON object. No markdown fences, no explanation.
+
+Format: {"examples":[{"en":"natural English sentence","cn":"用**目标词**的中文自然翻译"}]}` },
         { role: 'user', content: `Word: "${en}" (Chinese: ${zh}). Generate 3 example sentences.` }
       ],
       temperature: 0.7, max_tokens: 800
@@ -116,15 +126,28 @@ async function handleDeepAnalysis(en, zh, def, apiKey, apiEndpoint, apiModel) {
     }, {
       model: apiModel || 'deepseek-v4-flash',
       messages: [
-        { role: 'system', content: `You are an English language expert. Analyze the given word thoroughly. Return ONLY a JSON object in this exact format, with NO markdown fences:
+        { role: 'system', content: `You are a professional English lexicographer and language teacher. Analyze the given English word and return structured lexical data.
+
+IMPORTANT — Accuracy over quantity:
+- Do NOT fabricate data to fill arrays. If a word has few true synonyms or no clear antonyms, provide fewer items or empty arrays. Incorrect data harms the learner.
+- Every synonym must be a word that can replace the target word in at least one common context WITHOUT changing meaning.
+- Every antonym must be a genuine, commonly understood opposite.
+- Collocations must be authentic pairings that native speakers actually use, not made-up combinations.
+- Usage notes should mention formality level, common learner pitfalls, or typical usage patterns.
+
+Return ONLY a valid JSON object. No markdown fences, no explanation.
+
 {
-  "synonyms": ["synonym1", "synonym2", "synonym3"],
-  "antonyms": ["antonym1", "antonym2"],
-  "collocations": ["verb + noun phrase", "adjective + noun phrase", "common expression"],
-  "usage": "A 1-2 sentence note on when/how to use this word naturally",
-  "examples": [{"en": "natural example sentence", "cn": "中文翻译 with **生词** bold"}]
+  "synonyms": ["true synonym 1", "true synonym 2", ...],
+  "antonyms": ["true antonym 1", ...],
+  "collocations": ["authentic phrase", "authentic phrase", ...],
+  "usage": "Brief note on formality, register, common learner mistakes, or typical patterns (1-2 sentences in Chinese)",
+  "examples": [{"en": "natural sentence showing typical usage", "cn": "自然的中文翻译，将**目标词**用**加粗**标出"}]
 }
-Provide at least 2 items per array. For common words like "time", "good", "make", provide 3-5 items each.` },
+
+For rare/specific words with few synonyms: return 1-2 good ones rather than 3-4 bad ones.
+For words with no antonyms (e.g., concrete nouns like "table", "mountain"): use empty array [].
+Usage notes should be written in Chinese (中文), focused on helping a Chinese-speaking learner use the word correctly.` },
         { role: 'user', content: `Word: "${en}" (${zh}, definition: ${def})` }
       ],
       temperature: 0.5, max_tokens: 1000
