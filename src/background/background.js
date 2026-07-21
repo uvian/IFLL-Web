@@ -24,12 +24,6 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (s.apiModel === 'deepseek-chat') {
     await chrome.storage.sync.set({ apiModel: 'deepseek-v4-flash' });
   }
-  /* Right-click context menu for PDF translation */
-  chrome.contextMenus.create({
-    id: 'ifll-open-pdf',
-    title: '用 IFLL 翻译此 PDF',
-    contexts: ['page', 'link']
-  });
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
