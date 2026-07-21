@@ -145,7 +145,7 @@
   overflow-y: auto;
   background: #fdfdfc;
   color: #1A1A1A;
-  border: 1px solid #E6E2DD;
+  border: 1px solid #EBE7E3;
   border-radius: 10px;
   box-shadow: 0 4px 24px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04);
   font-family: -apple-system, 'Helvetica Neue', BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -181,7 +181,7 @@
 }
 .ifll-tt-divider {
   height: 1px;
-  background: #F0EDE8;
+  background: #F2F0ED;
   margin: 6px 14px;
 }
 .ifll-tt-label {
@@ -279,7 +279,7 @@
   flex-wrap: wrap;
   gap: 4px;
   padding: 8px 14px 10px 14px;
-  border-top: 1px solid #F0EDE8;
+  border-top: 1px solid #F2F0ED;
   margin-top: 6px;
 }
 .ifll-btn-known {
@@ -298,7 +298,7 @@
 .ifll-btn-known:hover:not(:disabled) { background: #F0F5F2; }
 .ifll-btn-unknown {
   flex: 1;
-  border: 1px solid #E6E2DD;
+  border: 1px solid #EBE7E3;
   border-radius: 5px;
   font-size: 12px;
   font-weight: 500;
@@ -311,7 +311,7 @@
 }
 .ifll-btn-unknown:hover:not(:disabled) { background: #F5F3F0; border-color: #D4CEC7; }
 .ifll-btn-exclude {
-  border: 1px solid #E6E2DD;
+  border: 1px solid #EBE7E3;
   border-radius: 5px;
   font-size: 11px;
   font-weight: 500;
@@ -354,28 +354,20 @@
 .ifll-btn-ai:hover:not(:disabled) { background: #E8EDF5; }
 .ifll-btn-ai:disabled { opacity: 0.6; cursor: not-allowed; animation: ifll-pulse 1s ease-in-out infinite; }
 
-/* Review buttons */
-.ifll-btn-review {
-  flex: 1;
-  border: 1px solid #E6E2DD;
-  border-radius: 5px;
-  font-size: 11px;
-  font-weight: 500;
-  padding: 5px 4px;
-  cursor: pointer;
-  background: #FAF9F7;
-  color: #6B6560;
-  transition: all 0.12s;
-  min-width: 0;
+/* ── Unified button pressed state ── */
+.ifll-prompt-btn:active,
+.ifll-btn-known:active:not(:disabled),
+.ifll-btn-unknown:active:not(:disabled),
+.ifll-btn-exclude:active:not(:disabled),
+.ifll-btn-addword:active:not(:disabled),
+.ifll-btn-ai:active:not(:disabled),
+.ifll-btn-review:active,
+.ifll-btn-regen:active,
+.ifll-sel-bar button:active,
+.ifll-btn-custom:active:not(:disabled) {
+  transform: scale(0.97);
 }
-.ifll-btn-r4 { border-color: #B8D8C4; color: #2D6A4F; }
-.ifll-btn-r4:hover { background: #F0F5F2; }
-.ifll-btn-r3 { border-color: #B8C8E0; color: #2E5090; }
-.ifll-btn-r3:hover { background: #EBEFF7; }
-.ifll-btn-r2 { border-color: #D4CEC7; color: #9A6B1C; }
-.ifll-btn-r2:hover { background: #FDF8F0; }
-.ifll-btn-r1 { border-color: #F0D8D8; color: #9B1B1B; }
-.ifll-btn-r1:hover { background: #FDF5F5; }
+
 .ifll-tt-cached { font-size: 10px; color: #9E9890; padding: 2px 14px 6px 14px; font-style: italic; }
 
 @keyframes ifll-fade-up {
@@ -473,18 +465,6 @@
 .ifll-btn-r1 { background: #fef2f2; color: #991b1b; }
 .ifll-btn-r1:hover { background: #fecaca; }
 
-/* ── Tooltip reveal animation ── */
-.ifll-tooltip {
-  animation: ifll-fade-up 0.18s ease-out;
-}
-@keyframes ifll-fade-up {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-
-  font-size: 12px;
-}
 
 /* ── Review count badge ── */
 .ifll-review-badge {
@@ -512,8 +492,6 @@
   background: rgba(37,99,235,0.04);
   border-radius: 2px;
 }
-.ifll-tt-cached { font-size: 10px; color: #9ca3af; margin-top: 4px; font-style: italic; }
-
 /* ── Dark theme tooltip ── */
 .ifll-tooltip.ifll-dark {
   background: #1E1E22;
@@ -557,6 +535,41 @@
 .ifll-tooltip.ifll-dark .ifll-btn-r2:hover { background: #2A2418; }
 .ifll-tooltip.ifll-dark .ifll-btn-r1 { border-color: #4A2828; color: #E88B8B; }
 .ifll-tooltip.ifll-dark .ifll-btn-r1:hover { background: #2A1A1A; }
+
+/* ── Custom AI action buttons ── */
+.ifll-btn-custom {
+  border: 1px solid #EBE7E3;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 5px 8px;
+  cursor: pointer;
+  background: #FAF9F7;
+  color: #6B6560;
+  transition: all 0.12s;
+  margin: 2px 0;
+}
+.ifll-btn-custom:hover:not(:disabled) {
+  background: #E8EDF5;
+  color: #2E5090;
+  border-color: #C0CCE0;
+}
+.ifll-btn-custom:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  animation: ifll-pulse 1s ease-in-out infinite;
+}
+.ifll-tooltip.ifll-dark .ifll-btn-custom {
+  background: #1E1E22;
+  border-color: #3A3632;
+  color: #A09A94;
+}
+.ifll-tooltip.ifll-dark .ifll-btn-custom:hover {
+  background: #22283A;
+  color: #7B9FD4;
+  border-color: #3A4A6B;
+}
+
 .ifll-tt-ai { padding: 4px 14px; }
 
 /* ── Regenerate button (circular arrow) ── */
@@ -571,39 +584,25 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  border: 1px solid #D6D0C8;
+  border: 1.5px solid #C8C2B8;
   background: transparent;
   cursor: pointer;
-  position: relative;
+  font-size: 13px;
+  color: #8A8580;
+  line-height: 18px;
+  text-align: center;
   transition: all 0.15s;
   padding: 0;
 }
-.ifll-btn-regen::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 8px;
-  height: 8px;
-  border: 2px solid #8A8580;
-  border-top-color: transparent;
-  border-right-color: transparent;
-  border-radius: 50%;
-  transform: translate(-50%, -50%) rotate(-45deg);
-}
 .ifll-btn-regen:hover {
   border-color: #2E5090;
+  color: #2E5090;
   background: #F0EEF5;
-}
-.ifll-btn-regen:hover::after {
-  border-left-color: #2E5090;
-  border-bottom-color: #2E5090;
+  transform: rotate(180deg);
 }
 
-.ifll-tooltip.ifll-dark .ifll-btn-regen { border-color: #3A3632; }
-.ifll-tooltip.ifll-dark .ifll-btn-regen::after { border-left-color: #8A8580; border-bottom-color: #8A8580; }
-.ifll-tooltip.ifll-dark .ifll-btn-regen:hover { border-color: #7B9FD4; background: #22283A; }
-.ifll-tooltip.ifll-dark .ifll-btn-regen:hover::after { border-left-color: #7B9FD4; border-bottom-color: #7B9FD4; }
+.ifll-tooltip.ifll-dark .ifll-btn-regen { border-color: #3A3632; color: #8A8580; }
+.ifll-tooltip.ifll-dark .ifll-btn-regen:hover { border-color: #7B9FD4; color: #7B9FD4; background: #22283A; }
 
 /* ── Selection Toolbar ── */
 .ifll-sel-bar {
@@ -612,7 +611,7 @@
   display: none;
   gap: 1px;
   background: #FAF9F7;
-  border: 1px solid #E6E2DD;
+  border: 1px solid #EBE7E3;
   border-radius: 6px;
   padding: 2px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
@@ -628,7 +627,7 @@
 .ifll-sel-bar button:hover { background: #E8EDF5; color: #2E5090; }
 .ifll-sel-tip {
   padding: 6px 10px; font-size: 12px; color: #4A453F;
-  background: #FFFEFA; border-top: 1px solid #F0EDE8;
+  background: #FFFEFA; border-top: 1px solid #F2F0ED;
   max-width: 300px; line-height: 1.5;
 }
 

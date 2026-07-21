@@ -138,6 +138,16 @@ const IFLL_INJECTOR = (() => {
   }
   function invalidateAhoCache() { ahoCache = null; }
 
+  /* ── Review queue memory cache (avoids chrome.storage read on every tooltip click) ── */
+  let reviewQueueCache = null;
+  async function getReviewQueueCached() {
+    if (reviewQueueCache) return reviewQueueCache;
+    const { reviewQueue } = await IFLL_STORAGE.get();
+    reviewQueueCache = reviewQueue;
+    return reviewQueueCache;
+  }
+  function invalidateReviewCache() { reviewQueueCache = null; }
+
   /* ---- Matching ---- */
   function findMatches(text, bankMap, knownSet, level) {
     const ac = ahoCache || getAutomaton();
@@ -174,16 +184,23 @@ const IFLL_INJECTOR = (() => {
   function selectMatches(matches, count, scene) {
     if (matches.length <= count) return matches;
     const sceneCats = SCENE_KEYS[scene] || [];
-    const scored = matches.map(m => ({ ...m, score: 0 + (m.len >= 2 ? 10 : 0) + (sceneCats.includes(m.cat) ? 5 : 0) + (sceneCats.includes(m.pos) ? 2 : 0) }));
-    scored.sort((a, b) => b.score - a.score);
+    /* Score on parallel array, sort indices — avoids deep-copying all match objects */
+    const scores = matches.map(m => (m.len >= 2 ? 10 : 0) + (sceneCats.includes(m.cat) ? 5 : 0) + (sceneCats.includes(m.pos) ? 2 : 0));
+    const idx = Array.from({ length: matches.length }, (_, i) => i);
+    idx.sort((a, b) => scores[b] - scores[a]);
     const selected = [];
     let lastEnd = -1;
-    for (const m of scored) {
+    for (const i of idx) {
       if (selected.length >= count) break;
+      const m = matches[i];
       if (m.idx >= lastEnd + 5) { selected.push(m); lastEnd = m.end; }
     }
     if (selected.length < count) {
-      for (const m of scored) { if (selected.length >= count) break; if (!selected.includes(m)) selected.push(m); }
+      for (const i of idx) {
+        if (selected.length >= count) break;
+        const m = matches[i];
+        if (!selected.includes(m)) selected.push(m);
+      }
     }
     return selected;
   }
@@ -232,16 +249,18 @@ const IFLL_INJECTOR = (() => {
 
   function injectAnnotate(settings) {
     const hostname = window.location.hostname;
+    if (!document.body) return;
     if (settings?.excludedSites?.some(s => hostname === s || hostname.endsWith('.' + s))) return;
     const bank = getEnWordBank();
+    if (!bank.size) return; // word bank not loaded
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
     let node;
     const nodes = [];
     while ((node = walker.nextNode())) {
-      if (node.parentElement?.closest?.('.ifll-annotated,.ifll-word,.ifll-tooltip,script,style,noscript,code,pre')) continue;
+      if (node.parentElement?.closest?.('.ifll-annotated,.ifll-word,.ifll-tooltip,script,style,noscript,code,pre,[contenteditable]')) continue;
       if (node.parentElement?.closest?.('a')) continue;
       const text = node.textContent;
-      /* Only process nodes with English words */
+      /* Only process nodes with English words (≥2 letters) */
       if (!/[a-zA-Z]{3,}/.test(text)) continue;
       nodes.push(node);
     }
@@ -282,7 +301,9 @@ const IFLL_INJECTOR = (() => {
   }
 
   /* ---- Translate mode: paragraph-level AI translation ---- */
-  let translateCache = {};
+  let translateCache = new Map();
+  const TRANSLATE_CACHE_MAX = 200;
+  const AI_EXAMPLES_CACHE_TTL = 30 * 86400000; // 30 days
   function injectTranslate(settings) {
     const hostname = window.location.hostname;
     if (settings?.excludedSites?.some(s => hostname === s || hostname.endsWith('.' + s))) return;
@@ -305,8 +326,8 @@ const IFLL_INJECTOR = (() => {
       if (p.querySelector('.ifll-trans-panel') || p.textContent.trim().length < 20) return;
       const text = p.textContent.trim();
       const key = text.slice(0, 80);
-      if (translateCache[key]) {
-        const panel = createTranslatePanel(translateCache[key]);
+      if (translateCache.has(key)) {
+        const panel = createTranslatePanel(translateCache.get(key));
         p.after(panel);
         translated++;
         IFLL_STORAGE.trackStat('translate', text.length).catch(() => {});
@@ -321,7 +342,10 @@ const IFLL_INJECTOR = (() => {
           apiModel: settings.apiModel
         });
         if (result?.success && result.translation) {
-          translateCache[key] = result.translation;
+          translateCache.set(key, result.translation);
+          if (translateCache.size > TRANSLATE_CACHE_MAX) {
+            translateCache.delete(translateCache.keys().next().value);
+          }
           const panel = createTranslatePanel(result.translation);
           p.after(panel);
           translated++;
@@ -523,7 +547,7 @@ const IFLL_INJECTOR = (() => {
     /* Check cache first (7-day TTL) */
     const cacheEntry = await IFLL_STORAGE.getAiCacheEntry(en);
     const now = Date.now();
-    if (cacheEntry?.examples?.length && cacheEntry.examplesCachedAt > now - 7 * 86400000) {
+    if (cacheEntry?.examples?.length && cacheEntry.examplesCachedAt > now - AI_EXAMPLES_CACHE_TTL) {
       return { success: true, examples: cacheEntry.examples, cached: true };
     }
     const s = await IFLL_STORAGE.get();
@@ -598,6 +622,7 @@ const IFLL_INJECTOR = (() => {
         } else if (btn.dataset.action === 'unknown') {
           await IFLL_STORAGE.markUnknown(wzh);
           await IFLL_STORAGE.addToReview(wzh, tooltipEl.dataset.en);
+          invalidateReviewCache();
           btn.textContent = '加入复习'; btn.disabled = true;
         } else if (btn.dataset.action === 'exclude-site') {
           const h = window.location.hostname;
@@ -622,6 +647,7 @@ const IFLL_INJECTOR = (() => {
             btn.dataset.action === 'review-2' || btn.dataset.action === 'review-1') {
           const score = parseInt(btn.dataset.action.split('-')[1]);
           await IFLL_STORAGE.scoreReview(wzh, score);
+          invalidateReviewCache();
           btn.parentElement.innerHTML = '<span style="color:#6b7280;font-size:12px">评分已记录</span>';
         }
       });
@@ -670,7 +696,7 @@ const IFLL_INJECTOR = (() => {
 
     /* SM-2 review scoring buttons (only for items in review queue) */
     (async () => {
-      const { reviewQueue } = await IFLL_STORAGE.get();
+      const reviewQueue = await getReviewQueueCached();
       if (reviewQueue.some(w => w.zh === zh)) {
         html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">复习评分</div>`;
         html += `<div class="ifll-tt-actions ifll-tt-actions-review">
@@ -716,7 +742,20 @@ const IFLL_INJECTOR = (() => {
   function startObserver(settings) {
     if (observer) observer.disconnect();
     let timer = null;
-    observer = new MutationObserver(() => {
+    observer = new MutationObserver((mutations) => {
+      /* Quick pre-filter: skip mutations from scripts, ads, style injectors */
+      const hasContent = mutations.some(m => {
+        for (const node of m.addedNodes) {
+          if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) return true;
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const tag = node.tagName;
+            if (/^(SCRIPT|STYLE|IFRAME|IMG|SVG|CANVAS|LINK|META|NOSCRIPT|INPUT)$/i.test(tag)) continue;
+            if (/[\u4e00-\u9fff]/.test((node.textContent || '').slice(0, 200))) return true;
+          }
+        }
+        return false;
+      });
+      if (!hasContent) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(async () => {
         try {
@@ -803,18 +842,18 @@ const IFLL_INJECTOR = (() => {
         ).join('') + (r.cached ? '<div class="ifll-tt-cached">cached</div>' : '');
     });
 
-    const deepBtn = document.getElementById('ifll-deep-btn');
-    if (deepBtn) deepBtn.addEventListener('click', async () => {
+    /* ── Deep analysis runner (shared by initial + regen buttons) ── */
+    async function runDeepAnalysis(regen = false) {
       if (!tooltipEl) return;
       const s = await IFLL_STORAGE.get();
-      if (!s.apiKey) { deepBtn.textContent = '无 API Key'; return; }
+      const btn = document.getElementById('ifll-deep-btn');
+      if (!btn) return;
+      if (!s.apiKey) { btn.textContent = '无 API Key'; return; }
       const en = tooltipEl.dataset.en, zh = tooltipEl.dataset.zh;
-      const isRegen = deepBtn.dataset.regen === '1';
-      if (isRegen) await IFLL_STORAGE.clearAiCache(en);
-      deepBtn.textContent = '分析中...'; deepBtn.disabled = true;
-      delete deepBtn.dataset.regen;
+      if (regen) await IFLL_STORAGE.clearAiCache(en);
+      btn.textContent = '分析中...'; btn.disabled = true;
       const r = await fetchDeepAnalysis(en, zh, '');
-      if (!r.success) { deepBtn.textContent = (r.error || '失败'); deepBtn.disabled = false; return; }
+      if (!r.success) { btn.textContent = (r.error || '失败'); btn.disabled = false; return; }
       const d = r.data;
       let h = '';
       if (d.synonyms?.length) h += `<div class="ifll-tt-deep-row"><span class="ifll-tt-deep-tag">同义</span> ${d.synonyms.join(', ')}</div>`;
@@ -827,11 +866,13 @@ const IFLL_INJECTOR = (() => {
       }
       const area = document.getElementById('ifll-deep-area');
       const cachedNote = r.cached ? '<span class="ifll-tt-cached">cached</span>' : '';
-      const regenBtn = `<button data-action=\"deep-analyze\" class=\"ifll-btn-regen\" id=\"ifll-deep-btn\" data-regen=\"1\" title=\"重新生成\"></button>`;
-      if (area) area.innerHTML = '<div class="ifll-tt-deep-header">' + cachedNote + regenBtn + '</div>' + (h || '<div class="ifll-tt-deep-empty">暂无数据</div>');
-      /* Re-bind click for the new regenerate button (always present) */
-      document.getElementById('ifll-deep-btn')?.addEventListener('click', () => deepBtn.click());
-    });
+      const regenBtnHtml = `<button class="ifll-btn-regen" id="ifll-deep-btn" title="重新生成">↻</button>`;
+      if (area) area.innerHTML = '<div class="ifll-tt-deep-header">' + cachedNote + regenBtnHtml + '</div>' + (h || '<div class="ifll-tt-deep-empty">暂无数据</div>');
+      /* Re-bind regen button */
+      document.getElementById('ifll-deep-btn')?.addEventListener('click', () => runDeepAnalysis(true));
+    }
+    const deepBtn = document.getElementById('ifll-deep-btn');
+    if (deepBtn) deepBtn.addEventListener('click', () => runDeepAnalysis(false));
   }
 
   /* ---- Public API ---- */
@@ -860,7 +901,7 @@ const IFLL_INJECTOR = (() => {
   async function start(mode) {
     createFloatBall();
     updateFloatBall(mode);
-    translateCache = {};
+    translateCache.clear();
     enWordBank = null;
     try {
       const s = await IFLL_STORAGE.get();

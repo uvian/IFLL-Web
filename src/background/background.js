@@ -2,6 +2,9 @@
  * IFLL — Background Service Worker
  * AI proxy: examples, deep analysis, model listing, connection test
  */
+/* Create context menu on every SW start (not just install) */
+try { chrome.contextMenus.create({ id: 'ifll-open-pdf', title: '用 IFLL 翻译此 PDF', contexts: ['page', 'link'] }); } catch (_) {}
+
 chrome.runtime.onInstalled.addListener(async () => {
   /* Only backfill missing keys — never overwrite existing user data */
   const s = await chrome.storage.sync.get(null);
@@ -21,6 +24,12 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (s.apiModel === 'deepseek-chat') {
     await chrome.storage.sync.set({ apiModel: 'deepseek-v4-flash' });
   }
+  /* Right-click context menu for PDF translation */
+  chrome.contextMenus.create({
+    id: 'ifll-open-pdf',
+    title: '用 IFLL 翻译此 PDF',
+    contexts: ['page', 'link']
+  });
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -144,28 +153,23 @@ async function handleDeepAnalysis(en, zh, def, apiKey, apiEndpoint, apiModel) {
     }, {
       model: apiModel || 'deepseek-v4-flash',
       messages: [
-        { role: 'system', content: `You are a professional English lexicographer and language teacher. Analyze the given English word and return structured lexical data.
+        { role: 'system', content: `You are a professional English lexicographer. Analyze the given word and return structured lexical data. Accuracy over quantity — never fabricate; empty arrays are better than wrong data.
 
-IMPORTANT — Accuracy over quantity:
-- Do NOT fabricate data to fill arrays. If a word has few true synonyms or no clear antonyms, provide fewer items or empty arrays. Incorrect data harms the learner.
-- Every synonym must be a word that can replace the target word in at least one common context WITHOUT changing meaning.
-- Every antonym must be a genuine, commonly understood opposite.
-- Collocations must be authentic pairings that native speakers actually use, not made-up combinations.
-- Usage notes should mention formality level, common learner pitfalls, or typical usage patterns.
+- Synonyms: must replace the target in ≥1 common context WITHOUT changing meaning.
+- Antonyms: genuine, commonly understood opposites. Use [] for words without antonyms (e.g. concrete nouns like "table").
+- Collocations: authentic phrases native speakers actually use.
+- Usage: 1-2 sentences in Chinese on formality, register, or common learner pitfalls.
 
-Return ONLY a valid JSON object. No markdown fences, no explanation.
-
+Return ONLY valid JSON, no markdown:
 {
-  "synonyms": ["true synonym 1", "true synonym 2", ...],
-  "antonyms": ["true antonym 1", ...],
-  "collocations": ["authentic phrase", "authentic phrase", ...],
-  "usage": "Brief note on formality, register, common learner mistakes, or typical patterns (1-2 sentences in Chinese)",
-  "examples": [{"en": "natural sentence showing typical usage", "cn": "自然的中文翻译，将**目标词**用**加粗**标出"}]
+  "synonyms": ["true synonym", ...],
+  "antonyms": ["true antonym", ...],
+  "collocations": ["authentic phrase", ...],
+  "usage": "Chinese note (1-2 sentences)",
+  "examples": [{"en": "natural sentence", "cn": "中文翻译，**目标词**加粗"}]
 }
 
-For rare/specific words with few synonyms: return 1-2 good ones rather than 3-4 bad ones.
-For words with no antonyms (e.g., concrete nouns like "table", "mountain"): use empty array [].
-Usage notes should be written in Chinese (中文), focused on helping a Chinese-speaking learner use the word correctly.` },
+Rare words: 1-2 good synonyms beat 3-4 bad ones.` },
         { role: 'user', content: `Word: "${en}" (${zh}, definition: ${def})` }
       ],
       temperature: 0.5, max_tokens: 1000
@@ -292,7 +296,7 @@ async function handleBatchDeep(words, apiKey, apiEndpoint, apiModel) {
   if (!apiKey || !words?.length) return { error: words ? "no api key" : "no words" };
   try {
     const wordList = words.map(w => '"' + w.en + '" (' + w.zh + ")").join(", ");
-    const prompt = 'Analyze each word. Return ONLY: {"results":[{"word":"...","synonyms":["s"],"antonyms":[],"collocations":[],"usage":"Chinese note","examples":[{"en":"ex","cn":"**w** trans"}]}]}. Empty arrays OK.';
+    const prompt = 'Lexicographer analysis. Accuracy > quantity — empty arrays are better than wrong data. Return ONLY JSON: {"results":[{"word":"...","synonyms":["s"],"antonyms":[],"collocations":[],"usage":"Chinese note"}]}.';
     const resp = await apiFetch(apiEndpoint, "/chat/completions", {
       "Content-Type": "application/json", "Authorization": "Bearer " + apiKey
     }, { model: apiModel || "deepseek-v4-flash", messages: [{ role: "system", content: prompt }, { role: "user", content: "Words: " + wordList }], max_tokens: 3000, temperature: 0.4 });
@@ -303,3 +307,15 @@ async function handleBatchDeep(words, apiKey, apiEndpoint, apiModel) {
     return p?.results ? { results: p.results } : { error: "cannot parse" };
   } catch (e) { return { error: e.message }; }
 }
+
+/* ── Context menu: open current/linked page in PDF translator ── */
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === 'ifll-open-pdf') {
+    const url = info.linkUrl || info.pageUrl || tab?.url;
+    if (url) {
+      chrome.tabs.create({
+        url: chrome.runtime.getURL('src/pdf/pdf.html?url=' + encodeURIComponent(url))
+      });
+    }
+  }
+});
