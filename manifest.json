@@ -4,8 +4,7 @@
   "version": "0.1.0",
   "description": "Inject English words into Chinese pages for immersive language learning — swap & learn while you browse.",
   "permissions": [
-    "storage",
-    "contextMenus"
+    "storage"
   ],
   "host_permissions": [
     "http://*/*",
@@ -35,7 +34,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["src/pdf/*"],
+      "resources": [],
       "matches": ["http://*/*", "https://*/*"]
     }
   ],

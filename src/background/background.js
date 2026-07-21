@@ -2,8 +2,6 @@
  * IFLL — Background Service Worker
  * AI proxy: examples, deep analysis, model listing, connection test
  */
-/* Create context menu on every SW start (not just install) */
-try { chrome.contextMenus.create({ id: 'ifll-open-pdf', title: '用 IFLL 翻译此 PDF', contexts: ['page', 'link'] }); } catch (_) {}
 
 chrome.runtime.onInstalled.addListener(async () => {
   /* Only backfill missing keys — never overwrite existing user data */
@@ -31,17 +29,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     IFLL_AI_EXAMPLES: () => handleAiExamples(message.en, message.zh, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_AI_DEEP_ANALYSIS: () => handleDeepAnalysis(message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_AI_TRANSLATE: () => handleAiTranslate(message.text, message.apiKey, message.apiEndpoint, message.apiModel),
-  IFLL_SEL_TOOLBAR: () => handleSelToolbar(message.action, message.text, message.apiKey, message.apiEndpoint, message.apiModel),
-  IFLL_CUSTOM_ACTION: () => handleCustomAction(message.action, message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
-  IFLL_BATCH_DEEP: () => handleBatchDeep(message.words, message.apiKey, message.apiEndpoint, message.apiModel),
-    IFLL_AI_PDF_TRANSLATE: () => handleAiTranslate(message.text, message.apiKey, message.apiEndpoint, message.apiModel),
+    IFLL_SEL_TOOLBAR: () => handleSelToolbar(message.action, message.text, message.apiKey, message.apiEndpoint, message.apiModel),
+    IFLL_CUSTOM_ACTION: () => handleCustomAction(message.action, message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
+    IFLL_BATCH_DEEP: () => handleBatchDeep(message.words, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_TEST_API: () => testApiConnection(message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_LIST_MODELS: () => listModels(message.apiKey, message.apiEndpoint),
-    IFLL_OPEN_PDF: () => {
-      const dest = message.url ? `src/pdf/pdf.html?url=${encodeURIComponent(message.url)}` : 'src/pdf/pdf.html';
-      chrome.tabs.create({ url: chrome.runtime.getURL(dest) });
-      return Promise.resolve({});
-    }
   };
   const fn = handlers[message.type];
   if (fn) { fn().then(sendResponse).catch(err => sendResponse({ error: err.message })); return true; }
@@ -301,15 +293,3 @@ async function handleBatchDeep(words, apiKey, apiEndpoint, apiModel) {
     return p?.results ? { results: p.results } : { error: "cannot parse" };
   } catch (e) { return { error: e.message }; }
 }
-
-/* ── Context menu: open current/linked page in PDF translator ── */
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === 'ifll-open-pdf') {
-    const url = info.linkUrl || info.pageUrl || tab?.url;
-    if (url) {
-      chrome.tabs.create({
-        url: chrome.runtime.getURL('src/pdf/pdf.html?url=' + encodeURIComponent(url))
-      });
-    }
-  }
-});

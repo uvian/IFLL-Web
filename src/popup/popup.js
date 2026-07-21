@@ -244,11 +244,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   /* ── Refresh page ── */
   refreshPageBtn.addEventListener('click', () => { chrome.tabs.reload(); });
 
-  const openPdfBtn = document.getElementById('openPdfViewer');
-  if (openPdfBtn) openPdfBtn.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ type: 'IFLL_OPEN_PDF', url: '' });
-  });
-
   /* ── Import / Export ── */
   exportBtn.addEventListener('click', async () => {
     const all = await chrome.storage.sync.get(null);
