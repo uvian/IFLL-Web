@@ -60,10 +60,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   /* ── Stats ── */
   const ds = settings.dailyStats || {};
-  document.getElementById('statReplace').textContent = ds.replace || 0;
-  document.getElementById('statAnnotate').textContent = ds.annotate || 0;
-  document.getElementById('statTranslate').textContent = ds.translate || 0;
-  document.getElementById('statMinutes').textContent = Math.round((ds.minutes || 0) / 60000) || 0;
+  document.getElementById('statReplace').textContent = ds.replaceCount || 0;
+  document.getElementById('statAnnotate').textContent = ds.annotateCount || 0;
+  document.getElementById('statTranslate').textContent = Math.round((ds.translateChars || 0) / 100) || 0;
+  document.getElementById('statMinutes').textContent = ds.totalLearned || 0;
   /* Word bank stats */
   document.getElementById('statWordbank').textContent = WORD_BANK.length;
   document.getElementById('statIpa').textContent = Math.round(WORD_BANK.filter(w => w.ipa).length / WORD_BANK.length * 100) + '%';
