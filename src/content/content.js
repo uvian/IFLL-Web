@@ -2,6 +2,46 @@
  * IFLL — Content Script
  * Entry point: runs on every page
  */
+(() => {
+  /* ── Selection Toolbar ── */
+  let selBar = null, selTimer = null;
+
+  function createSelBar() {
+    if (selBar) return;
+    selBar = document.createElement('div');
+    selBar.id = 'ifll-sel-bar';
+    selBar.className = 'ifll-sel-bar';
+    selBar.innerHTML = `<button data-sel-action="translate" title="翻译">译</button><button data-sel-action="explain" title="AI 解释">解</button><button data-sel-action="speak" title="朗读">音</button><button data-sel-action="copy" title="复制">抄</button>`;
+    selBar.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const action = btn.dataset.selAction;
+      const text = window.getSelection().toString().trim();
+      if (!text) return;
+      if (action === 'copy') { await navigator.clipboard.writeText(text); btn.textContent = '已复制'; setTimeout(() => btn.textContent = '抄', 1500); return; }
+      if (action === 'speak') { window.speechSynthesis?.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = text.match(/[\u4e00-\u9fff]/) ? 'zh-CN' : 'en-US'; u.rate = 0.9; window.speechSynthesis?.speak(u); return; }
+      try {
+        btn.textContent = '...';
+        const result = await chrome.runtime.sendMessage({ type: 'IFLL_SEL_TOOLBAR', action, text });
+        if (result?.text) { const tip = document.createElement('div'); tip.className = 'ifll-sel-tip'; tip.textContent = result.text.slice(0, 200); selBar.appendChild(tip); setTimeout(() => tip.remove(), 5000); }
+      } catch (_) { btn.textContent = '⚠'; setTimeout(() => btn.textContent = action === 'translate' ? '译' : '解', 2000); }
+    });
+    document.body.appendChild(selBar);
+  }
+
+  document.addEventListener('mouseup', () => {
+    clearTimeout(selTimer);
+    selTimer = setTimeout(() => {
+      const sel = window.getSelection(); const text = sel.toString().trim();
+      if (!text || text.length < 2 || text.length > 500) { if (selBar) selBar.style.display = 'none'; return; }
+      createSelBar(); const rect = sel.getRangeAt(0).getBoundingClientRect();
+      selBar.style.display = 'flex'; selBar.style.left = Math.min(rect.right, window.innerWidth - 180) + 'px'; selBar.style.top = (rect.top + window.scrollY - 36) + 'px';
+    }, 300);
+  });
+
+  document.addEventListener('mousedown', (e) => { if (selBar && !selBar.contains(e.target)) selBar.style.display = 'none'; });
+})();
+
 (async () => {
   async function showWelcomePrompt(hostname) {
     return new Promise((resolve) => {

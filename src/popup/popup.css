@@ -361,3 +361,12 @@ body {
 .p-batch-bar { flex: 1; height: 4px; background: #F0EDE8; border-radius: 2px; overflow: hidden; }
 .p-batch-fill { height: 100%; background: #2E5090; border-radius: 2px; width: 0; transition: width 0.3s; }
 .p-batch-text { font-size: 11px; color: #8A8580; min-width: 40px; text-align: right; }
+
+/* ── Privacy footer ── */
+.p-footer-privacy {
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid #EDEAE5;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.p-footer-privacy span { font-size: 11px; color: #A09A94; }
+.p-footer-privacy a { font-size: 11px; color: #2E5090; text-decoration: none; }
+.p-footer-privacy a:hover { text-decoration: underline; }

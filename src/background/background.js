@@ -28,6 +28,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     IFLL_AI_EXAMPLES: () => handleAiExamples(message.en, message.zh, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_AI_DEEP_ANALYSIS: () => handleDeepAnalysis(message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_AI_TRANSLATE: () => handleAiTranslate(message.text, message.apiKey, message.apiEndpoint, message.apiModel),
+  IFLL_SEL_TOOLBAR: () => handleSelToolbar(message.action, message.text, message.apiKey, message.apiEndpoint, message.apiModel),
+  IFLL_BATCH_DEEP: () => handleBatchDeep(message.words, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_AI_PDF_TRANSLATE: () => handleAiTranslate(message.text, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_TEST_API: () => testApiConnection(message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_LIST_MODELS: () => listModels(message.apiKey, message.apiEndpoint),
@@ -240,5 +242,23 @@ async function listModels(apiKey, apiEndpoint) {
     }
     const data = await resp.json();
     return { models: (data.data || []).map(m => m.id).sort() };
+  } catch (err) { return { error: err.message }; }
+}
+
+/* ---- Selection toolbar: translate or explain selected text ---- */
+async function handleSelToolbar(action, text, apiKey, apiEndpoint, apiModel) {
+  if (!apiKey) return { error: 'no api key' };
+  const isChinese = /[\u4e00-\u9fff]/.test(text);
+  try {
+    const prompt = action === 'explain'
+      ? 'Explain this briefly in Chinese, max 100 chars.'
+      : (isChinese ? 'Translate to English. Return ONLY the translation.' : 'Translate to natural Chinese. Return ONLY the translation.');
+    const resp = await apiFetch(apiEndpoint, '/chat/completions', {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + apiKey
+    }, { model: apiModel || 'deepseek-v4-flash', messages: [{ role: 'system', content: prompt }, { role: 'user', content: text }], max_tokens: 180, temperature: 0.3 });
+    if (!resp.ok) return { error: `HTTP ${resp.status}` };
+    const data = await resp.json();
+    return { text: getContent(data) || 'no response' };
   } catch (err) { return { error: err.message }; }
 }

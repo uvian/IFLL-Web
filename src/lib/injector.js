@@ -725,6 +725,24 @@ const IFLL_INJECTOR = (() => {
 
   /* ---- AI button handlers ---- */
   function setupAiButtons() {
+    /* Copy buttons on AI/Deep examples */
+    document.querySelectorAll('.ifll-tt-example').forEach(el => {
+      if (!el.querySelector('.ifll-btn-copy')) {
+        const btn = document.createElement('button');
+        btn.className = 'ifll-btn-copy';
+        btn.textContent = '▢';
+        btn.title = '复制';
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const text = el.textContent.replace(/▢/g, '').trim();
+          await navigator.clipboard.writeText(text);
+          btn.textContent = '✓';
+          setTimeout(() => btn.textContent = '▢', 1500);
+        });
+        el.style.position = 'relative';
+        el.appendChild(btn);
+      }
+    });
     const aiBtn = document.getElementById('ifll-ai-btn');
     if (aiBtn) aiBtn.addEventListener('click', async () => {
       if (!tooltipEl) return;
@@ -773,7 +791,31 @@ const IFLL_INJECTOR = (() => {
   }
 
   /* ---- Public API ---- */
+  /* Floating ball for quick mode toggle */
+  let floatBall = null;
+  function createFloatBall() {
+    if (floatBall) return;
+    floatBall = document.createElement('div');
+    floatBall.className = 'ifll-float';
+    floatBall.title = 'IFLL 模式切换';
+    floatBall.innerHTML = '<span class="ifll-float-icon"></span>';
+    floatBall.addEventListener('click', () => {
+      const modes = ['replace', 'annotate', 'translate', 'off'];
+      const cur = currentMode || 'replace';
+      const idx = modes.indexOf(cur);
+      const next = modes[(idx + 1) % 4];
+      switchMode(next);
+    });
+    document.body.appendChild(floatBall);
+  }
+  function updateFloatBall(mode) {
+    if (!floatBall) return;
+    floatBall.className = 'ifll-float ifll-float-' + mode;
+  }
+
   async function start(mode) {
+    createFloatBall();
+    updateFloatBall(mode);
     translateCache = {};
     enWordBank = null;
     try {
