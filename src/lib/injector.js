@@ -869,6 +869,14 @@ const IFLL_INJECTOR = (() => {
   /* ---- Public API ---- */
   /* Floating ball for quick mode toggle */
   let floatBall = null;
+  let _currentMode = 'replace';
+  async function switchMode(next) {
+    _currentMode = next;
+    destroy();
+    updateFloatBall(next);
+    await IFLL_STORAGE.setModeForHost(window.location.hostname, next);
+    start(next);
+  }
   function createFloatBall() {
     if (floatBall) return;
     floatBall = document.createElement('div');
@@ -877,14 +885,14 @@ const IFLL_INJECTOR = (() => {
     floatBall.innerHTML = '<span class="ifll-float-icon"></span>';
     floatBall.addEventListener('click', () => {
       const modes = ['replace', 'annotate', 'translate', 'off'];
-      const cur = currentMode || 'replace';
-      const idx = modes.indexOf(cur);
+      const idx = modes.indexOf(_currentMode);
       const next = modes[(idx + 1) % 4];
       switchMode(next);
     });
     document.body.appendChild(floatBall);
   }
   function updateFloatBall(mode) {
+    _currentMode = mode;
     if (!floatBall) return;
     floatBall.className = 'ifll-float ifll-float-' + mode;
   }
