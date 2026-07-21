@@ -272,8 +272,73 @@ document.addEventListener('DOMContentLoaded', async () => {
       for (const k of allowed) if (k in data) filtered[k] = data[k];
       await IFLL_STORAGE.set(filtered);
       importBtn.textContent = '已导入';
-      setTimeout(() => location.reload(), 600);
-    } catch (_) { importBtn.textContent = '文件无效'; }
-    importFile.value = '';
+      setTimeout(() => { importBtn.textContent = '导入'; }, 2000);
+    } catch (e) { importBtn.textContent = '出错'; }
+  });
+
+  /* ── Batch deep analysis pre-processing ── */
+  let batchAbort = false;
+  document.getElementById('batchStart').addEventListener('click', async () => {
+    const count = Math.max(10, Math.min(1000, parseInt(document.getElementById('batchCount').value) || 100));
+    const startBtn = document.getElementById('batchStart');
+    const stopBtn = document.getElementById('batchStop');
+    const progEl = document.getElementById('batchProgress');
+    const fillEl = document.getElementById('batchFill');
+    const textEl = document.getElementById('batchText');
+
+    const s = await IFLL_STORAGE.get();
+    if (!s.apiKey) { startBtn.textContent = '请先配置 API Key'; setTimeout(() => { startBtn.textContent = '开始'; }, 2000); return; }
+
+    batchAbort = false;
+    startBtn.style.display = 'none';
+    stopBtn.style.display = 'inline-block';
+    progEl.style.display = 'flex';
+
+    /* Build candidate list: WORD_BANK entries not yet in AI cache */
+    const cache = await IFLL_STORAGE.getAiCache();
+    const candidates = [];
+    for (const w of WORD_BANK) {
+      const en = (w.en || '').trim();
+      if (en && !cache[en]?.deep) candidates.push({ en, zh: w.zh, def: w.def || '' });
+    }
+    /* Shuffle and take count */
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+    const batch = candidates.slice(0, count);
+    const total = batch.length;
+
+    let done = 0;
+    for (const w of batch) {
+      if (batchAbort) break;
+      try {
+        const result = await Promise.race([
+          chrome.runtime.sendMessage({ type: 'IFLL_AI_DEEP_ANALYSIS', en: w.en, zh: w.zh, def: w.def, apiKey: s.apiKey, apiEndpoint: s.apiEndpoint, apiModel: s.apiModel }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000))
+        ]);
+        if (result && !result.error) {
+          const hasData = (result.synonyms?.length || result.antonyms?.length ||
+                          result.collocations?.length || result.usage || result.examples?.length);
+          if (hasData) {
+            await IFLL_STORAGE.setAiCacheEntry(w.en, { deep: result, deepCachedAt: Date.now() });
+          }
+        }
+      } catch (_) { /* skip errors, continue */ }
+      done++;
+      fillEl.style.width = (done / total * 100) + '%';
+      textEl.textContent = done + '/' + total;
+      /* Small delay between requests to avoid rate limiting */
+      if (done < total && !batchAbort) await new Promise(r => setTimeout(r, 800));
+    }
+
+    startBtn.style.display = 'inline-block';
+    stopBtn.style.display = 'none';
+    startBtn.textContent = batchAbort ? '已停止' : '完成';
+    setTimeout(() => { startBtn.textContent = '开始'; }, 3000);
+  });
+
+  document.getElementById('batchStop').addEventListener('click', () => {
+    batchAbort = true;
   });
 });

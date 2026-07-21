@@ -348,3 +348,16 @@ body {
 .p-btn, .p-mode-btn, .p-toggle-track, .p-input, .p-select {
   transition: all 0.15s ease;
 }
+
+/* ── Batch pre-processing ── */
+.p-batch { margin-bottom: 12px; }
+.p-batch-row { display: flex; align-items: center; gap: 6px; }
+.p-batch-label { font-size: 12px; color: #6B6560; }
+.p-input-sm { padding: 3px 6px; }
+.p-btn-sm { padding: 4px 10px; font-size: 12px; }
+.p-btn-ghost { background: transparent; border-color: transparent; color: #8A8580; }
+.p-btn-ghost:hover { color: #D44; border-color: #E6D0D0; background: #FFF5F5; }
+.p-batch-progress { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.p-batch-bar { flex: 1; height: 4px; background: #F0EDE8; border-radius: 2px; overflow: hidden; }
+.p-batch-fill { height: 100%; background: #2E5090; border-radius: 2px; width: 0; transition: width 0.3s; }
+.p-batch-text { font-size: 11px; color: #8A8580; min-width: 40px; text-align: right; }

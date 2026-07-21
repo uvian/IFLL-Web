@@ -85,6 +85,20 @@
       <div class="p-stat"><span class="p-stat-num" id="statKnown">0</span><span class="p-stat-label">已掌握</span></div>
       <div class="p-stat"><span class="p-stat-num" id="statReview">0</span><span class="p-stat-label">复习中</span></div>
     </div>
+    <div class="p-section-header">词库预处理</div>
+    <div class="p-batch">
+      <div class="p-batch-row">
+        <span class="p-batch-label">预生成深度解析</span>
+        <input type="number" id="batchCount" class="p-input p-input-sm" value="100" min="10" max="1000" style="width:60px">
+        <span class="p-batch-label">词</span>
+        <button id="batchStart" class="p-btn p-btn-sm">开始</button>
+        <button id="batchStop" class="p-btn p-btn-sm p-btn-ghost" style="display:none">停止</button>
+      </div>
+      <div class="p-batch-progress" id="batchProgress" style="display:none">
+        <div class="p-batch-bar"><div class="p-batch-fill" id="batchFill"></div></div>
+        <span class="p-batch-text" id="batchText">0/0</span>
+      </div>
+    </div>
   </div>
 
   <!-- Excluded sites -->
