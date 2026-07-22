@@ -42,7 +42,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function apiFetch(endpoint, path, headers, body) {
   const baseUrl = (endpoint || 'https://api.deepseek.com').replace(/\/+$/, '');
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
+  const timer = setTimeout(() => controller.abort(), 25000);
   try {
     return await fetch(baseUrl + path, {
       method: body ? 'POST' : 'GET',

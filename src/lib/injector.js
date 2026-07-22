@@ -554,14 +554,16 @@ const IFLL_INJECTOR = (() => {
     if (!s.apiKey) return { error: 'no api key' };
 
     let result = null;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    const retryDelays = [0, 1000, 2000]; // FluentRead pattern: wait before retry
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, retryDelays[attempt]));
       try {
         result = await Promise.race([
           chrome.runtime.sendMessage({
             type: 'IFLL_AI_COMBINED', en, zh, def,
             apiKey: s.apiKey, apiEndpoint: s.apiEndpoint, apiModel: s.apiModel
           }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout (12s)')), 12000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout (20s)')), 20000))
         ]);
         if (result && !result.error) break;
       } catch (err) {
