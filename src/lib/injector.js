@@ -722,7 +722,7 @@ const IFLL_INJECTOR = (() => {
 
     tooltipEl.dataset.zh = zh; tooltipEl.dataset.en = en;
     applyTooltipTheme(tooltipEl);
-    let html = `
+    let html = `<div class="ifll-tt-handle"></div>
       <div class="ifll-tt-header">
         <div class="ifll-tt-en">${htmlEncode(en)}<button data-action="speak" class="ifll-btn-speak" title="朗读发音"></button></div>
         <div class="ifll-tt-level">${htmlEncode(span.dataset.level || '')}</div>
@@ -789,6 +789,36 @@ const IFLL_INJECTOR = (() => {
       if (top + ttH > window.innerHeight - margin) top = window.innerHeight - ttH - margin;
       tooltipEl.style.top = top + 'px';
     })();
+    /* Bind drag on handle */
+    setupDragHandle(tooltipEl);
+  }
+
+  /* ── Drag handle ── */
+  let _dragState = null; // { tt, offX, offY }
+  let _dragListenersBound = false;
+  function onDragMove(e) {
+    if (!_dragState) return;
+    const { tt, offX, offY } = _dragState;
+    tt.style.left = Math.max(0, Math.min(e.clientX - offX, window.innerWidth - tt.offsetWidth)) + 'px';
+    tt.style.top = Math.max(0, Math.min(e.clientY - offY, window.innerHeight - tt.offsetHeight)) + 'px';
+    tt.style.transition = 'none';
+  }
+  function onDragUp() {
+    if (_dragState) { _dragState.tt.style.transition = ''; _dragState = null; }
+  }
+  function setupDragHandle(tt) {
+    const handle = tt.querySelector('.ifll-tt-handle');
+    if (!handle || handle.dataset.dragBound) return;
+    handle.dataset.dragBound = '1';
+    handle.addEventListener('mousedown', (e) => {
+      _dragState = { tt, offX: e.clientX - tt.offsetLeft, offY: e.clientY - tt.offsetTop };
+      e.preventDefault();
+    });
+    if (!_dragListenersBound) {
+      document.addEventListener('mousemove', onDragMove);
+      document.addEventListener('mouseup', onDragUp);
+      _dragListenersBound = true;
+    }
   }
 
   function hideTooltip(e) {

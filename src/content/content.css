@@ -141,7 +141,7 @@
   z-index: 2147483630;
   display: none;
   width: 300px;
-  max-height: 440px;
+  max-height: 460px;
   overflow-y: auto;
   background: #fdfdfc;
   color: #1A1A1A;
@@ -149,18 +149,27 @@
   border-radius: 10px;
   box-shadow: 0 4px 24px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04);
   font-family: -apple-system, 'Helvetica Neue', BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   padding: 0;
   user-select: none;
   animation: ifll-fade-up 0.18s ease-out;
 }
+/* Drag handle bar at top */
+.ifll-tt-handle {
+  width: 40px; height: 4px;
+  background: #D6D0C8; border-radius: 2px;
+  margin: 6px auto 0 auto;
+  opacity: 0.5; transition: opacity 0.15s;
+  cursor: move;
+}
+.ifll-tooltip:hover .ifll-tt-handle { opacity: 0.9; }
 .ifll-tt-en {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
-  padding: 12px 14px 0 14px;
+  padding: 14px 14px 0 14px;
 }
 .ifll-tt-meta {
-  font-size: 12px;
+  font-size: 13px;
   color: #6B6560;
   padding: 2px 14px 4px 14px;
 }
@@ -174,10 +183,10 @@
   color: #9E9890;
 }
 .ifll-tt-def {
-  font-size: 13px;
+  font-size: 14px;
   color: #1A1A1A;
   padding: 0 14px 6px 14px;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 .ifll-tt-divider {
   height: 1px;
@@ -185,7 +194,7 @@
   margin: 6px 14px;
 }
 .ifll-tt-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: #9E9890;
   text-transform: uppercase;
@@ -194,9 +203,8 @@
 }
 .ifll-tt-example {
   padding: 3px 14px;
-  font-size: 13px;
+  font-size: 14px;
   color: #1A1A1A;
-  font-style: italic;
   line-height: 1.5;
 }
 .ifll-tt-ai-example {
@@ -207,45 +215,43 @@
 }
 .ifll-tt-trans {
   padding: 2px 14px 4px 14px;
-  font-size: 12px;
+  font-size: 13px;
   color: #6B6560;
   line-height: 1.4;
 }
-.ifll-tt-bold {
-  font-weight: 600;
-}
+.ifll-tt-bold { font-weight: 600; }
 .ifll-tt-deep-row {
   padding: 3px 14px;
-  font-size: 12px;
+  font-size: 13px;
   color: #1A1A1A;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 .ifll-tt-deep-tag {
   display: inline-block;
   background: #F5F3F0;
   color: #6B6560;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   padding: 1px 6px;
   border-radius: 3px;
-  margin-right: 4px;
+  margin-right: 5px;
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
 .ifll-tt-deep-usage {
   padding: 4px 14px;
-  font-size: 12px;
+  font-size: 13px;
   color: #6B6560;
   line-height: 1.5;
   white-space: pre-wrap;
 }
 .ifll-tt-deep-empty {
   padding: 4px 14px;
-  font-size: 12px;
+  font-size: 13px;
   color: #9E9890;
 }
 .ifll-tt-deep {
-  max-height: 200px;
+  max-height: 240px;
   overflow-y: auto;
   padding: 4px 14px;
 }
