@@ -582,6 +582,12 @@
   background: #F0EEF5;
   transform: rotate(180deg);
 }
+.ifll-btn-regen-spinning {
+  animation: ifll-spin 0.8s linear infinite;
+  border-color: #2E5090 !important;
+  color: #2E5090 !important;
+}
+@keyframes ifll-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .ifll-tooltip.ifll-dark .ifll-btn-regen { border-color: #3A3632; color: #8A8580; }
 .ifll-tooltip.ifll-dark .ifll-btn-regen:hover { border-color: #7B9FD4; color: #7B9FD4; background: #22283A; }

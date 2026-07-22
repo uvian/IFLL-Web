@@ -898,7 +898,7 @@ const IFLL_INJECTOR = (() => {
         el.appendChild(btn);
       }
     });
-    /* ── Combined analysis runner (deep analysis + examples in one call) ── */
+    /* ── Combined analysis runner ── */
     async function runCombinedAnalysis(regen = false) {
       if (!tooltipEl) return;
       const s = await IFLL_STORAGE.get();
@@ -907,14 +907,17 @@ const IFLL_INJECTOR = (() => {
       if (!s.apiKey) { btn.textContent = '无 API Key'; return; }
       const en = tooltipEl.dataset.en, zh = tooltipEl.dataset.zh;
       if (regen) await IFLL_STORAGE.clearAiCache(en);
-      btn.textContent = '解析中...'; btn.disabled = true;
+      /* Start spinning animation, clear text */
+      btn.textContent = ''; btn.disabled = true;
+      btn.classList.add('ifll-btn-regen-spinning');
 
       const r = await fetchCombinedAnalysis(en, zh, '');
+      /* Stop spinning */
+      btn.classList.remove('ifll-btn-regen-spinning');
+      btn.disabled = false;
+
       if (!r.success) {
-        const errMsg = r.error || '失败';
-        btn.textContent = errMsg.length > 12 ? errMsg.slice(0, 12) + '…' : errMsg;
-        btn.disabled = false;
-        setTimeout(() => { if (document.getElementById('ifll-deep-btn')) btn.textContent = '重试'; }, 3000);
+        btn.textContent = '↻'; btn.title = '重试';
         return;
       }
       const d = r.data;
@@ -923,7 +926,6 @@ const IFLL_INJECTOR = (() => {
       if (d.antonyms?.length) h += `<div class="ifll-tt-deep-row"><span class="ifll-tt-deep-tag">反义</span> ${d.antonyms.join(', ')}</div>`;
       if (d.collocations?.length) h += `<div class="ifll-tt-deep-row"><span class="ifll-tt-deep-tag">搭配</span> ${d.collocations.join(', ')}</div>`;
       if (d.usage) h += `<div class="ifll-tt-deep-usage">${htmlEncode(d.usage)}</div>`;
-      /* Examples from combined response */
       const ex = r.examples || d.examples || [];
       if (ex.length) {
         h += '<div class="ifll-tt-divider"></div><div class="ifll-tt-label">例句</div>';
@@ -933,7 +935,6 @@ const IFLL_INJECTOR = (() => {
       const cachedNote = r.cached ? '<span class="ifll-tt-cached">cached</span>' : '';
       const regenBtnHtml = `<button class="ifll-btn-regen" id="ifll-deep-btn" title="重新生成">↻</button>`;
       if (area) area.innerHTML = '<div class="ifll-tt-deep-header">' + cachedNote + regenBtnHtml + '</div>' + (h || '<div class="ifll-tt-deep-empty">暂无数据</div>');
-      /* Re-bind regen button */
       document.getElementById('ifll-deep-btn')?.addEventListener('click', () => runCombinedAnalysis(true));
     }
     const deepBtn = document.getElementById('ifll-deep-btn');

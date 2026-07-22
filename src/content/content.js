@@ -22,7 +22,11 @@
       if (action === 'speak') { window.speechSynthesis?.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = text.match(/[\u4e00-\u9fff]/) ? 'zh-CN' : 'en-US'; u.rate = 0.9; window.speechSynthesis?.speak(u); return; }
       try {
         btn.textContent = '...';
-        const result = await chrome.runtime.sendMessage({ type: 'IFLL_SEL_TOOLBAR', action, text });
+        const s = await IFLL_STORAGE.get();
+        const result = await chrome.runtime.sendMessage({
+          type: 'IFLL_SEL_TOOLBAR', action, text,
+          apiKey: s.apiKey, apiEndpoint: s.apiEndpoint, apiModel: s.apiModel
+        });
         if (result?.text) { const tip = document.createElement('div'); tip.className = 'ifll-sel-tip'; tip.textContent = result.text.slice(0, 200); selBar.appendChild(tip); setTimeout(() => tip.remove(), 5000); }
       } catch (_) { btn.textContent = '⚠'; setTimeout(() => btn.textContent = action === 'translate' ? '译' : '解', 2000); }
     });
