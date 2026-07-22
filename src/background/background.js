@@ -62,7 +62,8 @@ function getContent(data) {
 /* ---- Robust JSON extraction (handles markdown, trailing commas, mixed text) ---- */
 function extractJson(text) {
   if (!text) return null;
-  let cleaned = text;
+  /* Strip <think>...</think> blocks (DeepSeek reasoning output) — FluentRead pattern */
+  let cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, '');
 
   /* If response is wrapped in a markdown code fence, extract the JSON inside */
   const fence = cleaned.match(/```(?:\w+)?\s*\n?([\s\S]*?)```/);
@@ -135,7 +136,8 @@ async function handleCombinedAnalysis(en, zh, def, apiKey, apiEndpoint, apiModel
         { role: 'system', content: COMBINED_SYSTEM },
         { role: 'user', content: `Word: "${en}" (${zh}${def ? ', ' + def : ''})` }
       ],
-      temperature: 0.5, max_tokens: 600
+      temperature: 0.5, max_tokens: 600,
+      response_format: { type: 'json_object' }
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => 'unknown');
