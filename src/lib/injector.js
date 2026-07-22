@@ -543,9 +543,8 @@ const IFLL_INJECTOR = (() => {
     return result;
   }
 
-  /* ── Combined analysis via SW (content script fetch blocked by page CSP) ── */
+  /* ── Combined analysis: streaming via Port, fallback to non-streaming ── */
   async function fetchCombinedAnalysis(en, zh, def) {
-    /* Check cache first */
     const cacheEntry = await IFLL_STORAGE.getAiCacheEntry(en);
     if (cacheEntry?.deep && cacheEntry?.examples?.length) {
       return { success: true, data: cacheEntry.deep, examples: cacheEntry.examples, cached: true };
@@ -553,8 +552,12 @@ const IFLL_INJECTOR = (() => {
     const s = await IFLL_STORAGE.get();
     if (!s.apiKey) return { error: 'no api key' };
 
+    /* Try streaming first (Read Frog pattern: show text as it arrives) */
+    try { const r = await fetchStreamViaPort(en, zh, def, s); if (r?.success) return r; } catch (_) {}
+
+    /* Non-streaming fallback with retry (FluentRead pattern) */
     let result = null;
-    const retryDelays = [0, 1000, 2000]; // FluentRead pattern: wait before retry
+    const retryDelays = [0, 1000, 2000];
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await new Promise(r => setTimeout(r, retryDelays[attempt]));
       try {
@@ -584,6 +587,75 @@ const IFLL_INJECTOR = (() => {
       await IFLL_STORAGE.setAiCacheEntry(en, entry);
     }
     return { success: true, data: result, examples: result.examples || [] };
+  }
+
+  /* ── Streaming via Port (SW pushes chunks → typing effect → parse at end) ── */
+  function fetchStreamViaPort(en, zh, def, s) {
+    return new Promise((resolve, reject) => {
+      let port;
+      try { port = chrome.runtime.connect({ name: 'ifll-stream' }); } catch (e) { return reject(e); }
+      let accumulated = '', resolved = false;
+      const timer = setTimeout(() => {
+        if (!resolved) { resolved = true; try { port.disconnect(); } catch (_) {} reject(new Error('stream timeout')); }
+      }, 22000);
+      port.onMessage.addListener(msg => {
+        if (resolved) return;
+        if (msg.chunk) {
+          accumulated += msg.chunk;
+          renderStreamPreview(accumulated);
+        } else if (msg.done) {
+          clearTimeout(timer); resolved = true;
+          try { port.disconnect(); } catch (_) {}
+          const parsed = parseJsonClient(accumulated);
+          if (parsed) resolve({ success: true, data: parsed, examples: parsed.examples || [], streaming: true });
+          else reject(new Error('cannot parse stream'));
+        } else if (msg.error) {
+          clearTimeout(timer); resolved = true;
+          try { port.disconnect(); } catch (_) {}
+          reject(new Error(msg.error));
+        }
+      });
+      port.onDisconnect.addListener(() => {
+        if (!resolved) { clearTimeout(timer); resolved = true; reject(new Error('port closed')); }
+      });
+      port.postMessage({ type: 'IFLL_AI_COMBINED', en, zh, def, apiKey: s.apiKey, apiEndpoint: s.apiEndpoint, apiModel: s.apiModel });
+    });
+  }
+
+  /* Client-side JSON parse (same logic as background.js extractJson) */
+  function parseJsonClient(text) {
+    if (!text) return null;
+    let cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, '');
+    const fence = cleaned.match(/```(?:\w+)?\s*\n?([\s\S]*?)```/);
+    cleaned = fence ? fence[1].trim() : cleaned.replace(/```\w*\n?/g, '').trim();
+    const start = cleaned.indexOf('{');
+    if (start < 0) return null;
+    let depth = 0, end = -1, inString = false, escaped = false;
+    for (let i = start; i < cleaned.length; i++) {
+      const ch = cleaned[i];
+      if (escaped) { escaped = false; continue; }
+      if (ch === '\\') { escaped = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === '{') depth++;
+      if (ch === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+    }
+    if (end <= start) {
+      let json = cleaned.slice(start);
+      const missing = (json.match(/{/g) || []).length - (json.match(/}/g) || []).length;
+      if (missing > 0 && missing <= 3) { json += '}'.repeat(missing); json = json.replace(/,(\s*[}\]])/g, '$1'); try { return JSON.parse(json); } catch (_) {} }
+      return null;
+    }
+    let json = cleaned.slice(start, end).replace(/,(\s*[}\]])/g, '$1');
+    try { return JSON.parse(json); } catch (_) { return null; }
+  }
+
+  /* Typing effect: show last ~200 chars of stream as it arrives */
+  function renderStreamPreview(text) {
+    const area = document.getElementById('ifll-deep-area');
+    if (!area) return;
+    const preview = text.length > 200 ? text.slice(-200) : text;
+    area.innerHTML = `<div class="ifll-tt-deep-streaming">${htmlEncode(preview).replace(/\n/g, '<br>')}<span class="ifll-tt-cursor">▌</span></div>`;
   }
 
   async function showTooltip(e) {

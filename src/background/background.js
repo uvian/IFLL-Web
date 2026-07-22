@@ -38,6 +38,73 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (fn) { fn().then(sendResponse).catch(err => sendResponse({ error: err.message })); return true; }
 });
 
+/* ── Streaming port for combined analysis ── */
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'ifll-stream') return;
+  port.onMessage.addListener(async (msg) => {
+    if (msg.type !== 'IFLL_AI_COMBINED') return;
+    const { en, zh, def, apiKey, apiEndpoint, apiModel } = msg;
+    if (!apiKey) { port.postMessage({ error: 'no api key' }); return; }
+    const baseUrl = (apiEndpoint || 'https://api.deepseek.com').replace(/\/+$/, '');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 25000);
+    try {
+      const resp = await fetch(baseUrl + '/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+        body: JSON.stringify({
+          model: apiModel || 'deepseek-v4-flash',
+          messages: [
+            { role: 'system', content: COMBINED_SYSTEM },
+            { role: 'user', content: `Word: "${en}" (${zh}${def ? ', ' + def : ''})` }
+          ],
+          temperature: 0.5, max_tokens: 600, stream: true,
+          response_format: { type: 'json_object' }
+        }),
+        signal: controller.signal
+      });
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => 'unknown');
+        port.postMessage({ error: `HTTP ${resp.status}: ${errText.substring(0, 150)}` });
+        return;
+      }
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (!data || data === '[DONE]') continue;
+          try {
+            const p = JSON.parse(data);
+            const delta = p.choices?.[0]?.delta?.content;
+            if (delta) port.postMessage({ chunk: delta });
+          } catch (_) {}
+        }
+      }
+      if (buffer.startsWith('data: ') && buffer.slice(6).trim() !== '[DONE]') {
+        try {
+          const p = JSON.parse(buffer.slice(6).trim());
+          const delta = p.choices?.[0]?.delta?.content;
+          if (delta) port.postMessage({ chunk: delta });
+        } catch (_) {}
+      }
+      port.postMessage({ done: true });
+    } catch (err) {
+      port.postMessage({ error: err.name === 'AbortError' ? '请求超时' : err.message });
+    } finally {
+      clearTimeout(timer);
+      try { port.disconnect(); } catch (_) {}
+    }
+  });
+});
+
 /* ---- Shared fetch with timeout ---- */
 async function apiFetch(endpoint, path, headers, body) {
   const baseUrl = (endpoint || 'https://api.deepseek.com').replace(/\/+$/, '');
