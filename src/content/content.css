@@ -512,8 +512,8 @@
 .ifll-tooltip.ifll-dark .ifll-btn-exclude:hover { background: #2A1A1A; color: #E88B8B; border-color: #4A3030; }
 .ifll-tooltip.ifll-dark .ifll-btn-addword { border-color: #4A4540; color: #8A8580; }
 .ifll-tooltip.ifll-dark .ifll-btn-addword:hover { border-color: #7B9FD4; color: #7B9FD4; }
-.ifll-tooltip.ifll-dark .ifll-btn-ai { background: #1E1E22; border-color: #3A4A6B; color: #7B9FD4; }
-.ifll-tooltip.ifll-dark .ifll-btn-ai:hover { background: #22283A; }
+.ifll-tooltip.ifll-dark .ifll-btn-ai { background: #1E1E22; border-color: #3A4A6B; color: #A0C4FF; }
+.ifll-tooltip.ifll-dark .ifll-btn-ai:hover { background: #252D40; color: #B8D4FF; }
 .ifll-tooltip.ifll-dark .ifll-btn-review { background: #1E1E22; border-color: #3A3632; color: #A09A94; }
 .ifll-tooltip.ifll-dark .ifll-btn-r4 { border-color: #4A6A55; color: #6DBF93; }
 .ifll-tooltip.ifll-dark .ifll-btn-r4:hover { background: #1A2A1F; }
@@ -595,8 +595,36 @@
 }
 @keyframes ifll-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
+/* ── Regen button: staggered rotation (spin → return → pause → repeat) ── */
+.ifll-btn-regen-loading {
+  animation: ifll-regen-loading 1.8s ease-in-out infinite;
+  border-color: #2E5090 !important;
+  color: #2E5090 !important;
+}
+@keyframes ifll-regen-loading {
+  0%   { transform: rotate(0deg); }
+  28%  { transform: rotate(360deg); }
+  40%  { transform: rotate(0deg); }
+  100% { transform: rotate(0deg); }
+}
+
+/* ── Initial AI button: brightness pulse during loading ── */
+.ifll-btn-ai-loading {
+  animation: ifll-ai-pulse 1.2s ease-in-out infinite;
+}
+@keyframes ifll-ai-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
 .ifll-tooltip.ifll-dark .ifll-btn-regen { border-color: #3A3632; color: #8A8580; }
 .ifll-tooltip.ifll-dark .ifll-btn-regen:hover { border-color: #7B9FD4; color: #7B9FD4; background: #22283A; }
+.ifll-tooltip.ifll-dark .ifll-btn-regen-loading { border-color: #93B8E8 !important; color: #93B8E8 !important; }
+.ifll-tooltip.ifll-dark .ifll-btn-ai-loading { animation: ifll-ai-pulse-dark 1.2s ease-in-out infinite; }
+@keyframes ifll-ai-pulse-dark {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
 
 /* ── Selection Toolbar ── */
 .ifll-sel-bar {

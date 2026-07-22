@@ -788,9 +788,9 @@ const IFLL_INJECTOR = (() => {
       if (top < margin) top = margin;
       if (top + ttH > window.innerHeight - margin) top = window.innerHeight - ttH - margin;
       tooltipEl.style.top = top + 'px';
+      /* Bind drag on handle — must be after innerHTML is populated */
+      setupDragHandle(tooltipEl);
     })();
-    /* Bind drag on handle */
-    setupDragHandle(tooltipEl);
   }
 
   /* ── Drag handle ── */
@@ -937,13 +937,20 @@ const IFLL_INJECTOR = (() => {
       if (!s.apiKey) { btn.textContent = '无 API Key'; return; }
       const en = tooltipEl.dataset.en, zh = tooltipEl.dataset.zh;
       if (regen) await IFLL_STORAGE.clearAiCache(en);
-      /* Start spinning animation, clear text */
-      btn.textContent = ''; btn.disabled = true;
-      btn.classList.add('ifll-btn-regen-spinning');
+      /* Loading state: keep text visible, differentiate by button type */
+      btn.disabled = true;
+      if (regen) {
+        /* Regen button: keep ↻, use staggered spin animation */
+        btn.classList.add('ifll-btn-regen-loading');
+      } else {
+        /* Initial button: keep '解析中' text, use pulse animation */
+        btn.textContent = '解析中';
+        btn.classList.add('ifll-btn-ai-loading');
+      }
 
       const r = await fetchCombinedAnalysis(en, zh, '');
-      /* Stop spinning */
-      btn.classList.remove('ifll-btn-regen-spinning');
+      /* Stop loading animations */
+      btn.classList.remove('ifll-btn-regen-loading', 'ifll-btn-ai-loading');
       btn.disabled = false;
 
       if (!r.success) {
