@@ -612,7 +612,7 @@ const IFLL_INJECTOR = (() => {
     return new Promise((resolve, reject) => {
       let port;
       try { port = chrome.runtime.connect({ name: 'ifll-stream' }); } catch (e) { return reject(e); }
-      let accumulated = '', resolved = false;
+      let accumulated = '', jsonAccum = '', resolved = false;
       const timer = setTimeout(() => {
         if (!resolved) { resolved = true; try { port.disconnect(); } catch (_) {} reject(new Error('stream timeout')); }
       }, 22000);
@@ -620,11 +620,14 @@ const IFLL_INJECTOR = (() => {
         if (resolved) return;
         if (msg.chunk) {
           accumulated += msg.chunk;
-          renderStreamPreview(accumulated);
+          /* Only actual content participates in JSON parsing — reasoning text
+             (DeepSeek V4 Flash) must NOT pollute the JSON accumulator. */
+          if (!msg.reasoning) jsonAccum += msg.chunk;
+          renderStreamPreview(accumulated, msg.reasoning);
         } else if (msg.done) {
           clearTimeout(timer); resolved = true;
           try { port.disconnect(); } catch (_) {}
-          const parsed = parseJsonClient(accumulated);
+          const parsed = parseJsonClient(jsonAccum || accumulated);
           if (parsed) resolve({ success: true, data: parsed, examples: parsed.examples || [], streaming: true });
           else reject(new Error('cannot parse stream'));
         } else if (msg.error) {
@@ -668,12 +671,15 @@ const IFLL_INJECTOR = (() => {
     try { return JSON.parse(json); } catch (_) { return null; }
   }
 
-  /* Typing effect: show last ~200 chars of stream as it arrives */
-  function renderStreamPreview(text) {
+  /* Typing effect: show last ~200 chars of stream as it arrives.
+     Reasoning chunks (DeepSeek V4 Flash thinking) render dimmed/italic so the
+     user sees progress without confusing thinking text for the final answer. */
+  function renderStreamPreview(text, isReasoning = false) {
     const area = document.getElementById('ifll-deep-area');
     if (!area) return;
     const preview = text.length > 200 ? text.slice(-200) : text;
-    area.innerHTML = `<div class="ifll-tt-deep-streaming">${htmlEncode(preview).replace(/\n/g, '<br>')}<span class="ifll-tt-cursor">▌</span></div>`;
+    const cls = isReasoning ? 'ifll-tt-deep-streaming ifll-tt-reasoning' : 'ifll-tt-deep-streaming';
+    area.innerHTML = `<div class="${cls}">${htmlEncode(preview).replace(/\n/g, '<br>')}<span class="ifll-tt-cursor">▌</span></div>`;
   }
 
   async function showTooltip(e) {

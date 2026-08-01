@@ -77,8 +77,9 @@ chrome.runtime.onConnect.addListener((port) => {
             { role: 'system', content: COMBINED_SYSTEM },
             { role: 'user', content: `Word: "${en}" (${zh}${def ? ', ' + def : ''})` }
           ],
-          temperature: 0.5, max_tokens: 600, stream: true,
-          response_format: { type: 'json_object' }
+          temperature: 0.5, max_tokens: 1200, stream: true,
+          response_format: { type: 'json_object' },
+          thinking: { type: 'disabled' }
         }),
         signal: controller.signal
       });
@@ -102,16 +103,25 @@ chrome.runtime.onConnect.addListener((port) => {
           if (!data || data === '[DONE]') continue;
           try {
             const p = JSON.parse(data);
-            const delta = p.choices?.[0]?.delta?.content;
-            if (delta) port.postMessage({ chunk: delta });
+            const delta = p.choices?.[0]?.delta;
+            /* DeepSeek V4 Flash (reasoning model) streams reasoning_content first
+               with content=null. Forward BOTH so the UI shows progress and the
+               final JSON still arrives. Tag reasoning chunks so the UI can dim them. */
+            const rc = delta?.reasoning_content;
+            const ct = delta?.content;
+            if (rc) port.postMessage({ chunk: rc, reasoning: true });
+            if (ct) port.postMessage({ chunk: ct });
           } catch (_) {}
         }
       }
       if (buffer.startsWith('data: ') && buffer.slice(6).trim() !== '[DONE]') {
         try {
           const p = JSON.parse(buffer.slice(6).trim());
-          const delta = p.choices?.[0]?.delta?.content;
-          if (delta) port.postMessage({ chunk: delta });
+          const delta = p.choices?.[0]?.delta;
+          const rc = delta?.reasoning_content;
+          const ct = delta?.content;
+          if (rc) port.postMessage({ chunk: rc, reasoning: true });
+          if (ct) port.postMessage({ chunk: ct });
         } catch (_) {}
       }
       port.postMessage({ done: true });
@@ -144,7 +154,6 @@ function getContent(data) {
   const msg = data.choices?.[0]?.message;
   return msg?.content || msg?.reasoning_content || '';
 }
-
 /* ---- Robust JSON extraction (handles markdown, trailing commas, mixed text) ---- */
 function extractJson(text) {
   if (!text) return null;
@@ -195,19 +204,14 @@ function extractJson(text) {
   }
 }
 
-/* ── Optimised combined system prompt ── */
-const COMBINED_SYSTEM = `English lexicographer. Analyze the word, return ONLY JSON:
-{
-  "synonyms": ["can replace in ≥1 context, same meaning"],
-  "antonyms": ["genuine opposite, [] for nouns without antonyms"],
-  "collocations": ["authentic native phrase"],
-  "usage": "Chinese: formality, register, learner pitfalls (1-2 sentences)",
-  "examples": [
-    {"en": "natural B1-B2 sentence, different contexts", "cn": "地道中文，**词**加粗"},
-    ...3 total
-  ]
-}
-Accuracy > quantity. Rare words: 1-2 good items > 3-4 bad ones. No fabrication.`;
+/* ── Optimised combined system prompt ──
+   Compact on purpose: DeepSeek V4 Flash is a reasoning model — verbose prompts
+   trigger long chain-of-thought that consumes the entire token budget and
+   leaves content empty. Short explicit schema + "no thinking" keeps reasoning
+   minimal (~150 chars) so the JSON actually gets generated. */
+const COMBINED_SYSTEM = `You are an English lexicographer. Return ONLY JSON, no thinking, no markdown. Schema:
+{"synonyms":["same-meaning word replaceable in >=1 context"],"antonyms":["true opposite, [] if none"],"collocations":["authentic native phrase"],"usage":"Chinese note: formality, register, pitfalls (1-2 sentences)","examples":[{"en":"natural B1-B2 sentence","cn":"地道中文, **词**加粗"}]}
+Exactly 3 examples, different contexts. Accuracy > quantity; never fabricate.`;
 
 /* ---- Combined analysis: deep analysis + examples in ONE call ---- */
 async function handleCombinedAnalysis(en, zh, def, apiKey, apiEndpoint, apiModel) {
@@ -222,8 +226,9 @@ async function handleCombinedAnalysis(en, zh, def, apiKey, apiEndpoint, apiModel
         { role: 'system', content: COMBINED_SYSTEM },
         { role: 'user', content: `Word: "${en}" (${zh}${def ? ', ' + def : ''})` }
       ],
-      temperature: 0.5, max_tokens: 600,
-      response_format: { type: 'json_object' }
+      temperature: 0.5, max_tokens: 1200,
+      response_format: { type: 'json_object' },
+      thinking: { type: 'disabled' }
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => 'unknown');
@@ -261,7 +266,8 @@ Requirements:
 Format: {"examples":[{"en":"natural English sentence","cn":"用**目标词**的中文自然翻译"}]}` },
         { role: 'user', content: `Word: "${en}" (Chinese: ${zh}). Generate 3 example sentences.` }
       ],
-      temperature: 0.7, max_tokens: 800
+      temperature: 0.7, max_tokens: 800,
+      thinking: { type: 'disabled' }
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => 'unknown');
@@ -287,26 +293,13 @@ async function handleDeepAnalysis(en, zh, def, apiKey, apiEndpoint, apiModel) {
     }, {
       model: apiModel || 'deepseek-v4-flash',
       messages: [
-        { role: 'system', content: `You are a professional English lexicographer. Analyze the given word and return structured lexical data. Accuracy over quantity — never fabricate; empty arrays are better than wrong data.
-
-- Synonyms: must replace the target in ≥1 common context WITHOUT changing meaning.
-- Antonyms: genuine, commonly understood opposites. Use [] for words without antonyms (e.g. concrete nouns like "table").
-- Collocations: authentic phrases native speakers actually use.
-- Usage: 1-2 sentences in Chinese on formality, register, or common learner pitfalls.
-
-Return ONLY valid JSON, no markdown:
-{
-  "synonyms": ["true synonym", ...],
-  "antonyms": ["true antonym", ...],
-  "collocations": ["authentic phrase", ...],
-  "usage": "Chinese note (1-2 sentences)",
-  "examples": [{"en": "natural sentence", "cn": "中文翻译，**目标词**加粗"}]
-}
-
-Rare words: 1-2 good synonyms beat 3-4 bad ones.` },
+        { role: 'system', content: `You are an English lexicographer. Return ONLY JSON, no thinking, no markdown. Schema:
+{"synonyms":["same-meaning word replaceable in >=1 context"],"antonyms":["true opposite, [] if none"],"collocations":["authentic native phrase"],"usage":"Chinese note: formality, register, pitfalls (1-2 sentences)","examples":[{"en":"natural sentence","cn":"地道中文, **词**加粗"}]}
+Accuracy > quantity; never fabricate.` },
         { role: 'user', content: `Word: "${en}" (${zh}, definition: ${def})` }
       ],
-      temperature: 0.5, max_tokens: 600
+      temperature: 0.5, max_tokens: 1200,
+      thinking: { type: 'disabled' }
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => 'unknown');
@@ -335,7 +328,8 @@ async function handleAiTranslate(text, apiKey, apiEndpoint, apiModel) {
         { role: 'system', content: `Translate the following ${langPair} text naturally. Return ONLY valid JSON: {"translation":"your translation here"}` },
         { role: 'user', content: text }
       ],
-      temperature: 0.3, max_tokens: Math.min(4096, Math.max(1024, Math.round(text.length * 1.2)))
+      temperature: 0.3, max_tokens: Math.min(4096, Math.max(1024, Math.round(text.length * 1.2))),
+      thinking: { type: 'disabled' }
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => 'unknown');
@@ -360,7 +354,8 @@ async function testApiConnection(apiKey, apiEndpoint, apiModel) {
     }, {
       model: apiModel || 'deepseek-v4-flash',
       messages: [{ role: 'user', content: 'Say "ok" in one word.' }],
-      max_tokens: 5
+      max_tokens: 5,
+      thinking: { type: 'disabled' }
     });
     if (resp.ok) return { success: true };
     const errText = await resp.text().catch(() => 'unknown');
@@ -399,7 +394,7 @@ async function handleCustomAction(action, en, zh, def, apiKey, apiEndpoint, apiM
       : " Return the result as concise plain text. No markdown.";
     const resp = await apiFetch(apiEndpoint, "/chat/completions", {
       "Content-Type": "application/json", "Authorization": "Bearer " + apiKey
-    }, { model: apiModel || "deepseek-v4-flash", messages: [{ role: "system", content: prompt + fmt }, { role: "user", content: en + (zh ? " (" + zh + ")" : "") }], max_tokens: 600, temperature: 0.5 });
+    }, { model: apiModel || "deepseek-v4-flash", messages: [{ role: "system", content: prompt + fmt }, { role: "user", content: en + (zh ? " (" + zh + ")" : "") }], max_tokens: 600, temperature: 0.5, thinking: { type: "disabled" } });
     if (!resp.ok) return { error: "HTTP " + resp.status };
     const data = await resp.json(); const content = getContent(data);
     if (!content) return { error: "empty response" };
@@ -418,7 +413,7 @@ async function handleSelToolbar(action, text, apiKey, apiEndpoint, apiModel) {
       : (isChinese ? "Translate to English. Return ONLY the translation." : "Translate to natural Chinese. Return ONLY the translation.");
     const resp = await apiFetch(apiEndpoint, "/chat/completions", {
       "Content-Type": "application/json", "Authorization": "Bearer " + apiKey
-    }, { model: apiModel || "deepseek-v4-flash", messages: [{ role: "system", content: prompt }, { role: "user", content: text }], max_tokens: 180, temperature: 0.3 });
+    }, { model: apiModel || "deepseek-v4-flash", messages: [{ role: "system", content: prompt }, { role: "user", content: text }], max_tokens: 180, temperature: 0.3, thinking: { type: "disabled" } });
     if (!resp.ok) return { error: "HTTP " + resp.status };
     const data = await resp.json();
     return { text: getContent(data) || "no response" };
@@ -433,7 +428,7 @@ async function handleBatchDeep(words, apiKey, apiEndpoint, apiModel) {
     const prompt = 'Lexicographer analysis. Accuracy > quantity — empty arrays are better than wrong data. Return ONLY JSON: {"results":[{"word":"...","synonyms":["s"],"antonyms":[],"collocations":[],"usage":"Chinese note"}]}.';
     const resp = await apiFetch(apiEndpoint, "/chat/completions", {
       "Content-Type": "application/json", "Authorization": "Bearer " + apiKey
-    }, { model: apiModel || "deepseek-v4-flash", messages: [{ role: "system", content: prompt }, { role: "user", content: "Words: " + wordList }], max_tokens: 3000, temperature: 0.4 });
+    }, { model: apiModel || "deepseek-v4-flash", messages: [{ role: "system", content: prompt }, { role: "user", content: "Words: " + wordList }], max_tokens: 3000, temperature: 0.4, thinking: { type: "disabled" } });
     if (!resp.ok) return { error: "HTTP " + resp.status };
     const dt = await resp.json(); const ct = getContent(dt);
     if (!ct) return { error: "empty response" };

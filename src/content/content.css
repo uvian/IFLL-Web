@@ -378,6 +378,9 @@
 
 /* Streaming live typing cursor */
 .ifll-tt-deep-streaming { padding: 8px 14px; font-size: 13px; color: #6B6560; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+/* DeepSeek V4 Flash reasoning text — dimmed/italic so thinking ≠ answer */
+.ifll-tt-reasoning { color: #9E9890; font-style: italic; }
+.ifll-tooltip.ifll-dark .ifll-tt-reasoning { color: #7A746D; }
 .ifll-tt-cursor { display: inline; animation: ifll-blink 1s step-end infinite; color: #2E5090; }
 @keyframes ifll-blink { 50% { opacity: 0; } }
 
