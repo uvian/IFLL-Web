@@ -31,6 +31,7 @@ const IFLL_STORAGE = (() => {
       replaceCount: 0,
       annotateCount: 0,
       translateChars: 0,
+      clickedCount: 0,
       totalLearned: 0
     }
   };
@@ -229,7 +230,10 @@ const IFLL_STORAGE = (() => {
     await chrome.storage.local.set({ aiCache: cache });
   }
 
-  /* ── Stats ── */
+  /* ── Stats ──
+     replaceCount = distinct words replaced today (deduped by injector via Set)
+     clickedCount = tooltip cards the user actually opened — the real "learned" metric
+     totalLearned  = clickedCount (exposure ≠ learning; a card only counts when opened) */
   async function trackStat(type, count = 1) {
     const { dailyStats } = await get();
     const today = new Date().toISOString().slice(0, 10);
@@ -238,12 +242,14 @@ const IFLL_STORAGE = (() => {
       dailyStats.replaceCount = 0;
       dailyStats.annotateCount = 0;
       dailyStats.translateChars = 0;
+      dailyStats.clickedCount = 0;
       dailyStats.totalLearned = 0;
     }
     if (type === 'replace') dailyStats.replaceCount += count;
     else if (type === 'annotate') dailyStats.annotateCount += count;
     else if (type === 'translate') dailyStats.translateChars += count;
-    dailyStats.totalLearned = dailyStats.replaceCount + dailyStats.annotateCount;
+    else if (type === 'click') dailyStats.clickedCount += count;
+    dailyStats.totalLearned = dailyStats.clickedCount;
     await set({ dailyStats });
   }
 

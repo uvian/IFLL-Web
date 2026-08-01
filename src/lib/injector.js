@@ -433,6 +433,9 @@ const IFLL_INJECTOR = (() => {
   }
 
   /* ---- Main inject (replace mode) ---- */
+  /* Dedup for replace stats: a word shown 5 times on a page counts once.
+     Persisted per-page; reset on destroy() so re-visits re-count fresh. */
+  let replacedStatSeen = new Set();
   async function injectReplace(root, settings) {
     if (!settings?.enabled) return;
     const { frequency, level, knownWords, excludedSites } = settings;
@@ -451,6 +454,7 @@ const IFLL_INJECTOR = (() => {
       textNodes.push(node);
     }
     let totalReplaced = 0;
+    const newWords = new Set();   // zh of words replaced for the FIRST time this page
 
     /* ── Phrase matching (collocation priority) ── */
     const phraseMap = await IFLL_STORAGE.getPhraseMap();
@@ -487,6 +491,7 @@ const IFLL_INJECTOR = (() => {
           tn.parentNode.replaceChild(frag, tn);
           phraseReplaced = true;
           totalReplaced++;
+          if (!replacedStatSeen.has(zhPhrase)) { replacedStatSeen.add(zhPhrase); newWords.add(zhPhrase); }
           break; // one phrase per node to avoid complexity
         }
       }
@@ -501,7 +506,7 @@ const IFLL_INJECTOR = (() => {
       if (!selected.length) continue;
 
       /* ── Fragment detection: if multiple replacements would fracture the sentence,
-             fall back to full-sentence translation (A) or phrase-first (C) ── */
+            fall back to full-sentence translation (A) or phrase-first (C) ── */
       if (selected.length >= 2) {
         let fragments = 0;
         for (let i = 1; i < selected.length; i++) {
@@ -512,12 +517,18 @@ const IFLL_INJECTOR = (() => {
         if (fragments >= 2 && settings.apiKey) {
           await translateTextNode(tn, text, settings);
           totalReplaced++;
+          for (const m of selected) {
+            if (!replacedStatSeen.has(m.zh)) { replacedStatSeen.add(m.zh); newWords.add(m.zh); }
+          }
           continue;
         }
       }
       replaceInTextNode(tn, selected, dailyWordSet); totalReplaced += selected.length;
+      for (const m of selected) {
+        if (!replacedStatSeen.has(m.zh)) { replacedStatSeen.add(m.zh); newWords.add(m.zh); }
+      }
     }
-    if (totalReplaced > 0) IFLL_STORAGE.trackStat('replace', totalReplaced).catch(() => {});
+    if (newWords.size > 0) IFLL_STORAGE.trackStat('replace', newWords.size).catch(() => {});
   }
 
   /* ---- Tooltip ---- */
@@ -693,6 +704,8 @@ const IFLL_INJECTOR = (() => {
   async function showTooltip(e) {
     const span = e.target.closest('.ifll-word, .ifll-annotated');
     if (!span) return;
+    /* A card the user actually opened = one unit of learning */
+    IFLL_STORAGE.trackStat('click', 1).catch(() => {});
     /* If the replacement word is inside a link, prevent navigation so the tooltip can display */
     if (span.closest('a')) { e.preventDefault(); e.stopPropagation(); }
     const rect = span.getBoundingClientRect();
@@ -869,10 +882,20 @@ const IFLL_INJECTOR = (() => {
   }
 
   let _tlsDone = false;
+  /* Capture-phase link guard: some pages (SPA frameworks) stopPropagation in their
+     own bubble listeners, so the bubble-phase guard in showTooltip never fires and
+     the link navigates. Capturing at document level runs BEFORE any page listener. */
+  function onDocClickCapture(e) {
+    const t = e.target;
+    if (!t || t.nodeType !== Node.ELEMENT_NODE) return;
+    const span = t.closest?.('.ifll-word, .ifll-annotated');
+    if (span && span.closest('a')) e.preventDefault();
+  }
   function setupTooltipListeners() {
     if (_tlsDone) return;
     document.addEventListener('click', showTooltip);
     document.addEventListener('click', hideTooltip, true);
+    document.addEventListener('click', onDocClickCapture, true);
     _tlsDone = true;
   }
 
@@ -1107,6 +1130,7 @@ const IFLL_INJECTOR = (() => {
   function destroy() {
     stopObserver(); removeTooltip();
     translateAborted = true;   /* cancel in-flight translation callbacks */
+    replacedStatSeen = new Set();  /* re-visits count fresh */
     /* Remove floating ball and selection bar remnants */
     if (floatBall?.parentNode) { floatBall.parentNode.removeChild(floatBall); floatBall = null; }
     const selBarEl = document.getElementById('ifll-sel-bar');
