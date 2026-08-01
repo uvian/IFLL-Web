@@ -31,6 +31,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     IFLL_SEL_TOOLBAR: () => handleSelToolbar(message.action, message.text, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_CUSTOM_ACTION: () => handleCustomAction(message.action, message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_BATCH_DEEP: () => handleBatchDeep(message.words, message.apiKey, message.apiEndpoint, message.apiModel),
+    IFLL_AI_DEEP_ANALYSIS: () => handleDeepAnalysis(message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_TEST_API: () => testApiConnection(message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_LIST_MODELS: () => listModels(message.apiKey, message.apiEndpoint),
   };
