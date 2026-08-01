@@ -2,6 +2,9 @@
  * IFLL — Settings storage wrapper
  */
 const IFLL_STORAGE = (() => {
+  /* Unbounded user-generated collections live in storage.local (10MB quota).
+     sync (100KB) holds only small config. Migrated in migrateBigDataToLocal(). */
+  const LOCAL_KEYS = ['knownWords', 'reviewQueue', 'userWords', 'phraseMap'];
   const DEFAULTS = {
     enabled: true,
     defaultMode: 'replace',
@@ -34,11 +37,42 @@ const IFLL_STORAGE = (() => {
 
   async function get() {
     const data = await chrome.storage.sync.get(DEFAULTS);
+    /* Merge local big collections (fall back to sync defaults if not yet migrated) */
+    const local = await chrome.storage.local.get(LOCAL_KEYS);
+    for (const k of LOCAL_KEYS) {
+      if (local[k] !== undefined) data[k] = local[k];
+    }
     return { ...DEFAULTS, ...data };
   }
 
   async function set(partial) {
-    await chrome.storage.sync.set(partial);
+    const syncPart = {};
+    const localPart = {};
+    for (const [k, v] of Object.entries(partial)) {
+      if (LOCAL_KEYS.includes(k)) localPart[k] = v;
+      else syncPart[k] = v;
+    }
+    if (Object.keys(syncPart).length) await chrome.storage.sync.set(syncPart);
+    if (Object.keys(localPart).length) await chrome.storage.local.set(localPart);
+  }
+
+  /* One-time migration: move unbounded collections from sync (100KB quota) to local (10MB).
+     Idempotent — only copies keys present in sync but absent in local, then removes from sync. */
+  async function migrateBigDataToLocal() {
+    const sync = await chrome.storage.sync.get(LOCAL_KEYS);
+    const local = await chrome.storage.local.get(LOCAL_KEYS);
+    const toLocal = {};
+    const toRemove = [];
+    for (const k of LOCAL_KEYS) {
+      if (sync[k] !== undefined && local[k] === undefined) {
+        toLocal[k] = sync[k];
+        toRemove.push(k);
+      }
+    }
+    if (Object.keys(toLocal).length) {
+      await chrome.storage.local.set(toLocal);
+      await chrome.storage.sync.remove(toRemove);
+    }
   }
 
   async function getModeForHost(hostname) {
@@ -226,6 +260,6 @@ const IFLL_STORAGE = (() => {
     getDailyWords, ensureDailyWords, addPhrase, getPhraseMap,
     markKnown, markUnknown, addToReview, scoreReview, getReviewCount, addUserWord,
     getAiCache, getAiCacheEntry, setAiCacheEntry, clearAiCache,
-    trackStat, buildFullBank, DEFAULTS
+    trackStat, buildFullBank, DEFAULTS, migrateBigDataToLocal, LOCAL_KEYS
   };
 })();

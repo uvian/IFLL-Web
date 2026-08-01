@@ -258,7 +258,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   /* ── Import / Export ── */
   exportBtn.addEventListener('click', async () => {
-    const all = await chrome.storage.sync.get(null);
+    const [syncAll, localBig] = await Promise.all([
+      chrome.storage.sync.get(null),
+      chrome.storage.local.get(['knownWords','reviewQueue','userWords','phraseMap'])
+    ]);
+    const all = { ...localBig, ...syncAll };  // big collections from local, config from sync
     all.__ifll_export_version = 1;
     all.__ifll_export_date = new Date().toISOString();
     const blob = new Blob([JSON.stringify(all, null, 2)], { type: 'application/json' });

@@ -22,6 +22,24 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (s.apiModel === 'deepseek-chat') {
     await chrome.storage.sync.set({ apiModel: 'deepseek-v4-flash' });
   }
+  /* Move unbounded collections (knownWords/reviewQueue/userWords/phraseMap)
+     from sync (100KB quota) to local (10MB) — prevents silent save failures.
+     Inlined here because the SW does not load storage.js. Idempotent. */
+  const BIG_KEYS = ['knownWords', 'reviewQueue', 'userWords', 'phraseMap'];
+  const bigSync = await chrome.storage.sync.get(BIG_KEYS);
+  const bigLocal = await chrome.storage.local.get(BIG_KEYS);
+  const toLocal = {};
+  const toRemove = [];
+  for (const k of BIG_KEYS) {
+    if (bigSync[k] !== undefined && bigLocal[k] === undefined) {
+      toLocal[k] = bigSync[k];
+      toRemove.push(k);
+    }
+  }
+  if (Object.keys(toLocal).length) {
+    await chrome.storage.local.set(toLocal);
+    await chrome.storage.sync.remove(toRemove);
+  }
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
