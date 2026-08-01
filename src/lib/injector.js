@@ -554,8 +554,11 @@ const IFLL_INJECTOR = (() => {
     return result;
   }
 
-  /* ── Combined analysis: streaming via Port, fallback to non-streaming ── */
-  async function fetchCombinedAnalysis(en, zh, def) {
+  /* ── Combined analysis: streaming via Port, fallback to non-streaming ──
+     silent=true → skip streaming UI entirely (used by prefetch — it only needs
+     the cache populated, and its streaming would render into whatever tooltip
+     happens to be open). */
+  async function fetchCombinedAnalysis(en, zh, def, silent = false) {
     const cacheEntry = await IFLL_STORAGE.getAiCacheEntry(en);
     if (cacheEntry?.deep && cacheEntry?.examples?.length) {
       return { success: true, data: cacheEntry.deep, examples: cacheEntry.examples, cached: true };
@@ -576,11 +579,14 @@ const IFLL_INJECTOR = (() => {
       await IFLL_STORAGE.setAiCacheEntry(en, entry);
     }
 
-    /* Try streaming first (Read Frog pattern: show text as it arrives) */
-    try {
-      const r = await fetchStreamViaPort(en, zh, def, s);
-      if (r?.success) { await cacheIfUsable(r.data); return r; }
-    } catch (_) {}
+    /* Try streaming first (Read Frog pattern: show text as it arrives) —
+       skipped in silent mode (prefetch) so background work never touches the UI */
+    if (!silent) {
+      try {
+        const r = await fetchStreamViaPort(en, zh, def, s);
+        if (r?.success) { await cacheIfUsable(r.data); return r; }
+      } catch (_) {}
+    }
 
     /* Non-streaming fallback with retry (FluentRead pattern) */
     let result = null;
@@ -623,7 +629,9 @@ const IFLL_INJECTOR = (() => {
           /* Only actual content participates in JSON parsing — reasoning text
              (DeepSeek V4 Flash) must NOT pollute the JSON accumulator. */
           if (!msg.reasoning) jsonAccum += msg.chunk;
-          renderStreamPreview(accumulated, msg.reasoning);
+          /* Render only if the open tooltip still targets this word — otherwise
+             a stale stream would write into a different word's panel. */
+          if (tooltipEl?.dataset.en === en) renderStreamPreview(accumulated, msg.reasoning);
         } else if (msg.done) {
           clearTimeout(timer); resolved = true;
           try { port.disconnect(); } catch (_) {}
@@ -990,6 +998,9 @@ const IFLL_INJECTOR = (() => {
         btn.textContent = '↻'; btn.title = '重试';
         return;
       }
+      /* Tooltip may have been re-targeted to another word while awaiting —
+         never render this word's result into a different word's panel. */
+      if (tooltipEl?.dataset.en !== en) return;
       const d = r.data;
       let h = '';
       if (d.synonyms?.length) h += `<div class="ifll-tt-deep-row"><span class="ifll-tt-deep-tag">同义</span> ${d.synonyms.join(', ')}</div>`;
@@ -1083,7 +1094,9 @@ const IFLL_INJECTOR = (() => {
       }
       for (const w of toFetch) {
         try {
-          await fetchCombinedAnalysis(w.en, w.zh, '');
+          /* silent=true: no streaming UI — prefetch must never render into an
+             open tooltip (would show "thinking JSON" without final result) */
+          await fetchCombinedAnalysis(w.en, w.zh, '', true);
           /* Small delay between requests to avoid rate limiting */
           await new Promise(r => setTimeout(r, 600));
         } catch (_) {}
