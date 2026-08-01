@@ -14,9 +14,10 @@
     "default_popup": "src/popup/popup.html",
     "default_title": "IFLL",
     "default_icon": {
-      "16": "icons/icon.svg",
-      "48": "icons/icon.svg",
-      "128": "icons/icon.svg"
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
   },
   "content_scripts": [
@@ -43,14 +44,15 @@
     "type": "module"
   },
   "icons": {
-    "16": "icons/icon.svg",
-    "48": "icons/icon.svg",
-    "128": "icons/icon.svg"
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
   },
   "browser_specific_settings": {
     "gecko": {
       "id": "ifll@wto.li",
-      "strict_min_version": "109.0"
+      "strict_min_version": "121.0"
     }
   }
 }

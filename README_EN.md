@@ -45,7 +45,6 @@ src/
 │   ├── injector.js    — DOM injection engine, Aho-Corasick matching
 │   ├── storage.js     — chrome.storage wrapper with defaults
 │   ├── wordbank.js    — 3,626-word bilingual vocabulary bank
-│   ├── notebase.js    — IndexedDB knowledge base
 │   └── ...
 ├── content/
 │   ├── content.js     — Page script: mode detection, selection toolbar
