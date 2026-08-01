@@ -82,6 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const updated = sites.filter(s => s !== btn.dataset.site);
         await IFLL_STORAGE.set({ excludedSites: updated });
         renderExcluded();
+        notifyTabsSettingsChanged();
       });
     });
   }
@@ -98,6 +99,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       sites.push(hostname);
       await IFLL_STORAGE.set({ excludedSites: sites });
       renderExcluded();
+      notifyTabsSettingsChanged();
     }
   });
 
@@ -159,6 +161,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     return apiEndpoint.value === '__custom__' ? apiEndpointCustom.value.trim() : apiEndpoint.value;
   }
 
+  /* ── Notify all tabs that settings changed (so pages re-apply immediately) ── */
+  async function notifyTabsSettingsChanged() {
+    const tabs = await chrome.tabs.query({});
+    for (const t of tabs) {
+      if (t.id == null) continue;
+      chrome.tabs.sendMessage(t.id, { type: 'IFLL_SETTINGS_CHANGED', settings: await IFLL_STORAGE.get() }).catch(() => {});
+    }
+  }
+
   /* ── Save full config ── */
   async function saveAll() {
     await IFLL_STORAGE.set({
@@ -171,6 +182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       apiModel: apiModel.value.trim(),
       voiceName: voiceSelect.value
     });
+    await notifyTabsSettingsChanged();
   }
 
   /* ── Toggle ── */

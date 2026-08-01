@@ -39,7 +39,10 @@
       const sel = window.getSelection(); const text = sel.toString().trim();
       if (!text || text.length < 2 || text.length > 500) { if (selBar) selBar.style.display = 'none'; return; }
       createSelBar(); const rect = sel.getRangeAt(0).getBoundingClientRect();
-      selBar.style.display = 'flex'; selBar.style.left = Math.min(rect.right, window.innerWidth - 180) + 'px'; selBar.style.top = (rect.top + window.scrollY - 36) + 'px';
+      /* .ifll-sel-bar is position:fixed — use pure viewport coords, clamp both edges */
+      selBar.style.display = 'flex';
+      selBar.style.left = Math.max(8, Math.min(rect.right, window.innerWidth - 180)) + 'px';
+      selBar.style.top = Math.max(8, rect.top - 36) + 'px';
     }, 300);
   });
 
@@ -50,9 +53,7 @@
   async function showWelcomePrompt(hostname) {
     return new Promise((resolve) => {
       const cached = sessionStorage.getItem('ifll_decision_' + hostname);
-      if (cached === 'accepted') { resolve('replace'); return; }
-      if (cached === 'rejected') { resolve('off'); return; }
-      if (cached && ['replace','annotate','translate'].includes(cached)) { resolve(cached); return; }
+      if (cached && ['replace','annotate','translate','off'].includes(cached)) { resolve(cached); return; }
 
       const bar = document.createElement('div');
       bar.className = 'ifll-prompt';
@@ -109,12 +110,15 @@
     if (!settings.enabled) return;
     const hostname = window.location.hostname;
     if (settings.excludedSites && settings.excludedSites.some(s => hostname === s || hostname.endsWith('.' + s))) return;
-    /* Check stored mode */
+    /* Only show the welcome prompt if the user has never chosen a mode for this host.
+       If a mode was persisted (popup or previous visit), use it directly — do NOT re-prompt. */
     let mode = await IFLL_STORAGE.getModeForHost(hostname);
     if (mode === 'off') return;
-    /* Show prompt if on first visit */
-    mode = await showWelcomePrompt(hostname);
-    if (mode === 'off') return;
+    const { siteModes } = await IFLL_STORAGE.get();
+    if (!siteModes || !(hostname in siteModes)) {
+      mode = await showWelcomePrompt(hostname);
+      if (mode === 'off') return;
+    }
     IFLL_INJECTOR.start(mode);
   }
 
