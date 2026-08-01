@@ -154,15 +154,30 @@
   user-select: none;
   animation: ifll-fade-up 0.18s ease-out;
 }
-/* Drag handle bar at top */
+/* Drag handle bar at top — sticky so it stays visible while card content scrolls */
 .ifll-tt-handle {
-  width: 40px; height: 4px;
-  background: #D6D0C8; border-radius: 2px;
-  margin: 6px auto 0 auto;
-  opacity: 0.5; transition: opacity 0.15s;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  width: 100%;
+  height: 14px;               /* full-width hit area — easy to grab */
+  flex-shrink: 0;
   cursor: move;
+  background: inherit;        /* mask scrolled content behind the bar */
+  transition: none;
+  border-radius: 10px 10px 0 0;
 }
-.ifll-tooltip:hover .ifll-tt-handle { opacity: 0.9; }
+.ifll-tt-handle::after {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 4px;
+  margin: 5px auto 0;
+  background: #D6D0C8;
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+.ifll-tooltip:hover .ifll-tt-handle::after { background: #A8A096; }
 .ifll-tt-en {
   font-size: 20px;
   font-weight: 600;

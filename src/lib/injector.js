@@ -820,6 +820,7 @@ const IFLL_INJECTOR = (() => {
   /* ── Drag handle ── */
   let _dragState = null; // { tt, offX, offY }
   let _dragListenersBound = false;
+  let _lastDragEnd = 0;  // timestamp — hideTooltip ignores clicks right after a drag
   function onDragMove(e) {
     if (!_dragState) return;
     const { tt, offX, offY } = _dragState;
@@ -828,7 +829,11 @@ const IFLL_INJECTOR = (() => {
     tt.style.transition = 'none';
   }
   function onDragUp() {
-    if (_dragState) { _dragState.tt.style.transition = ''; _dragState = null; }
+    if (_dragState) {
+      _dragState.tt.style.transition = '';
+      _dragState = null;
+      _lastDragEnd = Date.now();
+    }
   }
   function setupDragHandle(tt) {
     const handle = tt.querySelector('.ifll-tt-handle');
@@ -846,6 +851,10 @@ const IFLL_INJECTOR = (() => {
   }
 
   function hideTooltip(e) {
+    /* Ignore clicks fired immediately after a drag — the mouseup that ends a drag
+       can also trigger a click on whatever is under the cursor, which would
+       close the card the user just dragged. */
+    if (Date.now() - _lastDragEnd < 300) return;
     if (tooltipEl && !e.target.closest('.ifll-tooltip') && !e.target.closest('.ifll-word') && !e.target.closest('.ifll-annotated')) {
       tooltipEl.style.display = 'none';
     }
