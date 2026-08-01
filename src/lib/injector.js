@@ -304,6 +304,7 @@ const IFLL_INJECTOR = (() => {
   let translateCache = new Map();
   const TRANSLATE_CACHE_MAX = 200;
   const AI_EXAMPLES_CACHE_TTL = 30 * 86400000; // 30 days
+  let translateAborted = false;
   function injectTranslate(settings) {
     const hostname = window.location.hostname;
     if (settings?.excludedSites?.some(s => hostname === s || hostname.endsWith('.' + s))) return;
@@ -320,39 +321,49 @@ const IFLL_INJECTOR = (() => {
       return;
     }
     /* Find paragraphs */
-    const paragraphs = document.querySelectorAll('p, li, blockquote, .article-content > div, [class*="content"] > p, [class*="article"] > p');
+    const paragraphs = Array.from(document.querySelectorAll('p, li, blockquote, .article-content > div, [class*="content"] > p, [class*="article"] > p'))
+      .filter(p => !p.querySelector('.ifll-trans-panel') && p.textContent.trim().length >= 20);
+    const MAX_TRANSLATE = 30;      /* hard cap per page */
+    const CONCURRENCY = 3;         /* parallel AI requests */
+    translateAborted = false;
     let translated = 0;
-    paragraphs.forEach(async (p) => {
-      if (p.querySelector('.ifll-trans-panel') || p.textContent.trim().length < 20) return;
-      const text = p.textContent.trim();
-      const key = text.slice(0, 80);
-      if (translateCache.has(key)) {
-        const panel = createTranslatePanel(translateCache.get(key));
-        p.after(panel);
-        translated++;
-        IFLL_STORAGE.trackStat('translate', text.length).catch(() => {});
-        return;
-      }
-      try {
-        const result = await chrome.runtime.sendMessage({
-          type: 'IFLL_AI_TRANSLATE',
-          text,
-          apiKey: settings.apiKey,
-          apiEndpoint: settings.apiEndpoint,
-          apiModel: settings.apiModel
-        });
-        if (result?.success && result.translation) {
-          translateCache.set(key, result.translation);
-          if (translateCache.size > TRANSLATE_CACHE_MAX) {
-            translateCache.delete(translateCache.keys().next().value);
-          }
-          const panel = createTranslatePanel(result.translation);
+    let cursor = 0;
+
+    async function worker() {
+      while (cursor < paragraphs.length && translated < MAX_TRANSLATE && !translateAborted) {
+        const p = paragraphs[cursor++];
+        const text = p.textContent.trim();
+        const key = text.slice(0, 80);
+        if (translateCache.has(key)) {
+          const panel = createTranslatePanel(translateCache.get(key));
           p.after(panel);
           translated++;
           IFLL_STORAGE.trackStat('translate', text.length).catch(() => {});
+          continue;
         }
-      } catch (_) {}
-    });
+        try {
+          const result = await chrome.runtime.sendMessage({
+            type: 'IFLL_AI_TRANSLATE',
+            text,
+            apiKey: settings.apiKey,
+            apiEndpoint: settings.apiEndpoint,
+            apiModel: settings.apiModel
+          });
+          if (result?.success && result.translation && !translateAborted) {
+            translateCache.set(key, result.translation);
+            if (translateCache.size > TRANSLATE_CACHE_MAX) {
+              translateCache.delete(translateCache.keys().next().value);
+            }
+            const panel = createTranslatePanel(result.translation);
+            p.after(panel);
+            translated++;
+            IFLL_STORAGE.trackStat('translate', text.length).catch(() => {});
+          }
+        } catch (_) {}
+      }
+    }
+    /* Run bounded workers */
+    for (let i = 0; i < CONCURRENCY; i++) worker();
   }
 
   function createTranslatePanel(text) {
@@ -552,8 +563,24 @@ const IFLL_INJECTOR = (() => {
     const s = await IFLL_STORAGE.get();
     if (!s.apiKey) return { error: 'no api key' };
 
+    /* Cache the result if it has any usable data (empty results never cached) */
+    async function cacheIfUsable(result) {
+      const hasData = result?.synonyms?.length || result?.antonyms?.length ||
+                      result?.collocations?.length || result?.usage || result?.examples?.length;
+      if (!hasData) return;
+      const entry = cacheEntry || {};
+      entry.deep = { synonyms: result.synonyms, antonyms: result.antonyms, collocations: result.collocations, usage: result.usage };
+      entry.deepCachedAt = Date.now();
+      entry.examples = result.examples || [];
+      entry.examplesCachedAt = Date.now();
+      await IFLL_STORAGE.setAiCacheEntry(en, entry);
+    }
+
     /* Try streaming first (Read Frog pattern: show text as it arrives) */
-    try { const r = await fetchStreamViaPort(en, zh, def, s); if (r?.success) return r; } catch (_) {}
+    try {
+      const r = await fetchStreamViaPort(en, zh, def, s);
+      if (r?.success) { await cacheIfUsable(r.data); return r; }
+    } catch (_) {}
 
     /* Non-streaming fallback with retry (FluentRead pattern) */
     let result = null;
@@ -576,16 +603,7 @@ const IFLL_INJECTOR = (() => {
     }
     if (!result || result.error) return { error: (result && result.error) || 'no response' };
 
-    const hasData = result.synonyms?.length || result.antonyms?.length ||
-                    result.collocations?.length || result.usage || result.examples?.length;
-    if (hasData) {
-      const entry = cacheEntry || {};
-      entry.deep = { synonyms: result.synonyms, antonyms: result.antonyms, collocations: result.collocations, usage: result.usage };
-      entry.deepCachedAt = Date.now();
-      entry.examples = result.examples || [];
-      entry.examplesCachedAt = Date.now();
-      await IFLL_STORAGE.setAiCacheEntry(en, entry);
-    }
+    await cacheIfUsable(result);
     return { success: true, data: result, examples: result.examples || [] };
   }
 
@@ -705,7 +723,7 @@ const IFLL_INJECTOR = (() => {
             examples, examplesCn
           });
           btn.textContent = added ? '✓ 已添加' : '已存在'; btn.disabled = true;
-          if (added) invalidateAhoCache();
+          if (added) { invalidateAhoCache(); enWordBank = null; }
         } else if (btn.dataset.action === 'speak') {
           speakWord(tooltipEl.dataset.en);
         }
@@ -1060,6 +1078,11 @@ const IFLL_INJECTOR = (() => {
 
   function destroy() {
     stopObserver(); removeTooltip();
+    translateAborted = true;   /* cancel in-flight translation callbacks */
+    /* Remove floating ball and selection bar remnants */
+    if (floatBall?.parentNode) { floatBall.parentNode.removeChild(floatBall); floatBall = null; }
+    const selBarEl = document.getElementById('ifll-sel-bar');
+    if (selBarEl?.parentNode) { selBarEl.parentNode.removeChild(selBarEl); }
     /* Restore original text using dataset.zh for accurate reversal */
     document.querySelectorAll('.ifll-replaced, .ifll-trans-panel, .ifll-annotated, .ifll-word').forEach(el => {
       if (!el.parentNode) return;
