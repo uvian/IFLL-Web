@@ -71,12 +71,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('statReview').textContent = (settings.reviewQueue || []).length;
 
   /* ── Excluded sites ── */
+  const EXCLUDED_PREVIEW = 5;   // show this many collapsed, rest behind "展开"
+  let excludedExpanded = false;
+
+  function compactHost(s) {
+    /* Visual shortening only — full hostname kept in data-site for removal */
+    let h = s.replace(/^www\./, '');
+    return h.length > 22 ? h.slice(0, 10) + '…' + h.slice(-8) : h;
+  }
+
   async function renderExcluded() {
     const s = await IFLL_STORAGE.get();
     const sites = s.excludedSites || [];
-    excludedList.innerHTML = sites.length ? sites.map(s =>
-      `<span class="p-excluded-item">${s}<button class="p-excluded-remove" data-site="${s}">x</button></span>`
-    ).join('') : '<span class="p-empty">暂无</span>';
+    if (!sites.length) {
+      excludedList.innerHTML = '<span class="p-empty">暂无</span>';
+      return;
+    }
+    const shown = excludedExpanded ? sites : sites.slice(0, EXCLUDED_PREVIEW);
+    const hidden = sites.length - shown.length;
+    excludedList.innerHTML = shown.map(site =>
+      `<span class="p-excluded-item" title="${site}">${compactHost(site)}<button class="p-excluded-remove" data-site="${site}">x</button></span>`
+    ).join('') + (hidden > 0
+      ? `<button class="p-excluded-toggle" id="excludedToggle">共 ${sites.length} 个 · 展开</button>`
+      : (excludedExpanded ? `<button class="p-excluded-toggle" id="excludedToggle">收起</button>` : ''));
+    const toggle = document.getElementById('excludedToggle');
+    if (toggle) toggle.addEventListener('click', () => { excludedExpanded = !excludedExpanded; renderExcluded(); });
     excludedList.querySelectorAll('.p-excluded-remove').forEach(btn => {
       btn.addEventListener('click', async () => {
         const updated = sites.filter(s => s !== btn.dataset.site);

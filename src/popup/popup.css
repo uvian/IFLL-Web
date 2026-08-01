@@ -272,6 +272,17 @@ body {
   opacity: 0.5;
 }
 .p-excluded-remove:hover { opacity: 1; }
+.p-excluded-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--c-accent);
+  padding: 2px 4px;
+  line-height: 1.4;
+}
+.p-excluded-toggle:hover { text-decoration: underline; }
+.p-excluded-list:has(.p-excluded-item:nth-child(n+10)) { max-height: 110px; overflow-y: auto; }
 
 /* Buttons */
 .p-btn {
