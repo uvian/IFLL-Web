@@ -52,6 +52,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     IFLL_AI_DEEP_ANALYSIS: () => handleDeepAnalysis(message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_TEST_API: () => testApiConnection(message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_LIST_MODELS: () => listModels(message.apiKey, message.apiEndpoint),
+    IFLL_TRACK_STAT: () => handleTrackStat(message.stat, message.count),
   };
   const fn = handlers[message.type];
   if (fn) { fn().then(sendResponse).catch(err => sendResponse({ error: err.message })); return true; }
@@ -256,46 +257,6 @@ async function handleCombinedAnalysis(en, zh, def, apiKey, apiEndpoint, apiModel
   } catch (err) { return { error: err.message }; }
 }
 
-/* ---- Generate example sentences ---- */
-async function handleAiExamples(en, zh, apiKey, apiEndpoint, apiModel) {
-  if (!apiKey) return { error: 'no api key' };
-  try {
-    const resp = await apiFetch(apiEndpoint, '/chat/completions', {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + apiKey
-    }, {
-      model: apiModel || 'deepseek-v4-flash',
-      messages: [
-        { role: 'system', content: `You are an English teacher for Chinese-speaking learners (intermediate level). Your job is to generate example sentences that help the learner internalize a specific English word.
-
-Requirements:
-- Generate 3 example sentences using the given word in DIFFERENT contexts (different meanings or collocations if applicable).
-- Each sentence must sound NATURAL — something a native speaker would actually say in daily conversation, not a dictionary-style fabricated sentence.
-- Keep sentence difficulty at intermediate level (B1-B2). Avoid overly complex structures or rare vocabulary.
-- Chinese translations must be natural, idiomatic Chinese (地道中文), NOT word-for-word literal translation.
-- In the Chinese translation, wrap the translated target word in **double asterisks** so the learner can see where it appears.
-- Return ONLY a valid JSON object. No markdown fences, no explanation.
-
-Format: {"examples":[{"en":"natural English sentence","cn":"用**目标词**的中文自然翻译"}]}` },
-        { role: 'user', content: `Word: "${en}" (Chinese: ${zh}). Generate 3 example sentences.` }
-      ],
-      temperature: 0.7, max_tokens: 800,
-      ...(isDeepSeekLike(apiEndpoint, apiModel) ? { thinking: { type: 'disabled' } } : {})
-    });
-    if (!resp.ok) {
-      const errText = await resp.text().catch(() => 'unknown');
-      return { error: `HTTP ${resp.status}: ${errText.substring(0, 150)}` };
-    }
-    const data = await resp.json();
-    const content = getContent(data);
-    if (!content) return { error: 'empty response' };
-    const parsed = extractJson(content);
-    if (!parsed) return { error: 'cannot parse AI response' };
-    if (!parsed.examples || !Array.isArray(parsed.examples)) return { error: 'missing examples array' };
-    return { examples: parsed.examples };
-  } catch (err) { return { error: err.message }; }
-}
-
 /* ---- Deep analysis: synonyms, collocations, usage ---- */
 async function handleDeepAnalysis(en, zh, def, apiKey, apiEndpoint, apiModel) {
   if (!apiKey) return { error: 'no api key' };
@@ -374,6 +335,35 @@ async function testApiConnection(apiKey, apiEndpoint, apiModel) {
     const errText = await resp.text().catch(() => 'unknown');
     return { error: `HTTP ${resp.status}: ${errText.substring(0, 120)}` };
   } catch (err) { return { error: err.message }; }
+}
+
+/* ---- Track stats (single-writer: SW context) ----
+   Content scripts' get→modify→set on chrome.storage races across tabs (each
+   context has its own state). The SW is one context, and a promise chain here
+   serializes ALL tabs' increments into one atomic read-modify-write. */
+let statQueue = Promise.resolve();
+async function handleTrackStat(stat, count = 1) {
+  statQueue = statQueue.then(async () => {
+    try {
+      const { dailyStats = {} } = await chrome.storage.sync.get('dailyStats');
+      const today = new Date().toISOString().slice(0, 10);
+      if (dailyStats.date !== today) {
+        dailyStats.date = today;
+        dailyStats.replaceCount = 0;
+        dailyStats.annotateCount = 0;
+        dailyStats.translateChars = 0;
+        dailyStats.clickedCount = 0;
+        dailyStats.totalLearned = 0;
+      }
+      if (stat === 'replace') dailyStats.replaceCount += count;
+      else if (stat === 'annotate') dailyStats.annotateCount += count;
+      else if (stat === 'translate') dailyStats.translateChars += count;
+      else if (stat === 'click') dailyStats.clickedCount += count;
+      dailyStats.totalLearned = dailyStats.clickedCount;
+      await chrome.storage.sync.set({ dailyStats });
+    } catch (_) { /* one failed write must not break the chain */ }
+  });
+  return statQueue;
 }
 
 /* ---- List models ---- */

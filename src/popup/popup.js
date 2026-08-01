@@ -213,7 +213,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   frequency.addEventListener('change', () => saveAll());
   level.addEventListener('change', () => saveAll());
 
-  dailyCount.addEventListener('change', () => savePartial({ dailyWordCount: parseInt(dailyCount.value) || 15 }));
+  dailyCount.addEventListener('change', () => savePartial({ dailyWordCount: parseInt(dailyCount.value) || 15, dailyWordDate: '' }));
 
   /* Theme toggle */
   const tooltipTheme = document.getElementById('tooltipTheme');

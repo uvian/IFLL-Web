@@ -6,6 +6,22 @@
   /* ── Selection Toolbar ── */
   let selBar = null, selTimer = null;
 
+  /* Clipboard with insecure-context (http) fallback */
+  async function copyText(text) {
+    if (navigator.clipboard?.writeText) {
+      try { await navigator.clipboard.writeText(text); return true; } catch (_) {}
+    }
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none;';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (_) {}
+    ta.remove();
+    return ok;
+  }
+
   function createSelBar() {
     if (selBar) return;
     selBar = document.createElement('div');
@@ -18,7 +34,7 @@
       const action = btn.dataset.selAction;
       const text = window.getSelection().toString().trim();
       if (!text) return;
-      if (action === 'copy') { await navigator.clipboard.writeText(text); btn.textContent = '已复制'; setTimeout(() => btn.textContent = '抄', 1500); return; }
+      if (action === 'copy') { const ok = await copyText(text); btn.textContent = ok ? '已复制' : '失败'; setTimeout(() => btn.textContent = '抄', 1500); return; }
       if (action === 'speak') { window.speechSynthesis?.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = text.match(/[\u4e00-\u9fff]/) ? 'zh-CN' : 'en-US'; u.rate = 0.9; window.speechSynthesis?.speak(u); return; }
       try {
         btn.textContent = '...';

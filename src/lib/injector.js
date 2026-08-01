@@ -138,7 +138,12 @@ const IFLL_INJECTOR = (() => {
   }
   function invalidateAhoCache() { ahoCache = null; }
 
-  /* ── Review queue memory cache (avoids chrome.storage read on every tooltip click) ── */
+  /* Track a stat via the SW single-writer (cross-tab safe — see handleTrackStat) */
+  function trackStat(type, count = 1) {
+    return chrome.runtime.sendMessage({ type: 'IFLL_TRACK_STAT', stat: type, count }).catch(() => {});
+  }
+
+  /* ---- Review queue memory cache (avoids chrome.storage read on every tooltip click) ---- */
   let reviewQueueCache = null;
   async function getReviewQueueCached() {
     if (reviewQueueCache) return reviewQueueCache;
@@ -253,6 +258,10 @@ const IFLL_INJECTOR = (() => {
     if (settings?.excludedSites?.some(s => hostname === s || hostname.endsWith('.' + s))) return;
     const bank = getEnWordBank();
     if (!bank.size) return; // word bank not loaded
+    /* Respect known words + level — annotating words the user already marked
+       known (or above their level) defeats the purpose. */
+    const knownSet = new Set(settings?.knownWords || []);
+    const level = settings?.level || 'cet4';
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
     let node;
     const nodes = [];
@@ -275,7 +284,9 @@ const IFLL_INJECTOR = (() => {
       for (let i = 0; i < words.length; i++) {
         const word = words[i].toLowerCase().replace(/[^a-z-]/g, '');
         const entry = word.length >= 3 ? bank.get(word) : null;
-        if (entry && annotateCount < 80) {
+        if (entry && !knownSet.has(entry.zh) &&
+            (entry.level === 'all' || getLevelWeight(entry.level) <= getLevelWeight(level)) &&
+            annotateCount < 80) {
           const span = document.createElement('span');
           span.className = 'ifll-annotated';
           span.dataset.en = entry.en;
@@ -297,7 +308,7 @@ const IFLL_INJECTOR = (() => {
       }
       if (modified) tn.parentNode.replaceChild(fragment, tn);
     }
-    IFLL_STORAGE.trackStat('annotate', annotateCount).catch(() => {});
+    trackStat('annotate', annotateCount).catch(() => {});
   }
 
   /* ---- Translate mode: paragraph-level AI translation ---- */
@@ -333,12 +344,14 @@ const IFLL_INJECTOR = (() => {
       while (cursor < paragraphs.length && translated < MAX_TRANSLATE && !translateAborted) {
         const p = paragraphs[cursor++];
         const text = p.textContent.trim();
-        const key = text.slice(0, 80);
+        /* Full text as key — the old 80-char prefix slice made long paragraphs
+           with the same opening collide and reuse the wrong translation */
+        const key = text;
         if (translateCache.has(key)) {
           const panel = createTranslatePanel(translateCache.get(key));
           p.after(panel);
           translated++;
-          IFLL_STORAGE.trackStat('translate', text.length).catch(() => {});
+          trackStat('translate', text.length).catch(() => {});
           continue;
         }
         try {
@@ -357,7 +370,7 @@ const IFLL_INJECTOR = (() => {
             const panel = createTranslatePanel(result.translation);
             p.after(panel);
             translated++;
-            IFLL_STORAGE.trackStat('translate', text.length).catch(() => {});
+            trackStat('translate', text.length).catch(() => {});
           }
         } catch (_) {}
       }
@@ -466,6 +479,7 @@ const IFLL_INJECTOR = (() => {
       /* 1. Phrase-level replacement first */
       let phraseReplaced = false;
       for (const [zhPhrase, enPhrase] of Object.entries(phraseMap)) {
+        if (knownSet.has(zhPhrase)) continue;   /* user already knows the phrase */
         if (text.includes(zhPhrase)) {
           const idx = text.indexOf(zhPhrase);
           const before = text.slice(0, idx);
@@ -528,12 +542,29 @@ const IFLL_INJECTOR = (() => {
         if (!replacedStatSeen.has(m.zh)) { replacedStatSeen.add(m.zh); newWords.add(m.zh); }
       }
     }
-    if (newWords.size > 0) IFLL_STORAGE.trackStat('replace', newWords.size).catch(() => {});
+    if (newWords.size > 0) trackStat('replace', newWords.size).catch(() => {});
   }
 
   /* ---- Tooltip ---- */
   let tooltipEl = null;
   function htmlEncode(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+  /* Clipboard with insecure-context (http) fallback — navigator.clipboard is
+     undefined on http pages; execCommand('copy') still works there. */
+  async function copyText(text) {
+    if (navigator.clipboard?.writeText) {
+      try { await navigator.clipboard.writeText(text); return true; } catch (_) {}
+    }
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none;';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (_) {}
+    ta.remove();
+    return ok;
+  }
   function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
   function speakWord(word) {
@@ -708,7 +739,7 @@ const IFLL_INJECTOR = (() => {
     const span = e.target.closest('.ifll-word, .ifll-annotated');
     if (!span) return;
     /* A card the user actually opened = one unit of learning */
-    IFLL_STORAGE.trackStat('click', 1).catch(() => {});
+    trackStat('click', 1).catch(() => {});
     /* If the replacement word is inside a link, prevent navigation so the tooltip can display */
     if (span.closest('a')) { e.preventDefault(); e.stopPropagation(); }
     const rect = span.getBoundingClientRect();
@@ -987,8 +1018,8 @@ const IFLL_INJECTOR = (() => {
         btn.addEventListener('click', async (e) => {
           e.stopPropagation();
           const text = el.textContent.replace(/▢/g, '').trim();
-          await navigator.clipboard.writeText(text);
-          btn.textContent = '✓';
+          const ok = await copyText(text);
+          btn.textContent = ok ? '✓' : '✗';
           setTimeout(() => btn.textContent = '▢', 1500);
         });
         el.style.position = 'relative';
@@ -1015,7 +1046,9 @@ const IFLL_INJECTOR = (() => {
         btn.classList.add('ifll-btn-ai-loading');
       }
 
-      const r = await fetchCombinedAnalysis(en, zh, '');
+      let r;
+      try { r = await fetchCombinedAnalysis(en, zh, ''); }
+      catch (err) { r = { error: err.message }; }   /* never leave the button stuck in 解析中 */
       /* Stop loading animations */
       btn.classList.remove('ifll-btn-regen-loading', 'ifll-btn-ai-loading');
       btn.disabled = false;

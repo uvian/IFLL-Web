@@ -96,7 +96,10 @@ const IFLL_STORAGE = (() => {
 
     if (s.dailyWordDate === today && s.dailyWords?.length) {
       /* Filter out words that were marked as known today */
-      return s.dailyWords.filter(w => !knownSet.has(w.zh) && w.zh.length >= 2);
+      const remaining = s.dailyWords.filter(w => !knownSet.has(w.zh) && w.zh.length >= 2);
+      if (remaining.length) return remaining;
+      /* All of today's words were marked known → fall through and pick a
+         fresh batch instead of returning an empty set (no highlights, no prefetch). */
     }
 
     /* New day — select fresh batch */
@@ -220,6 +223,21 @@ const IFLL_STORAGE = (() => {
   async function setAiCacheEntry(en, data) {
     const cache = await getAiCache();
     cache[en] = data;
+    /* Guard the ~10MB local quota by BYTE size (entry count alone can't bound
+       it — verbose entries reach 2.5KB each). Evict oldest (by deepCachedAt;
+       legacy untimestamped entries sort first) until under the cap. */
+    const AI_CACHE_MAX_BYTES = 7.5 * 1024 * 1024;
+    const keys = Object.keys(cache);
+    let size = 0;
+    for (const k of keys) size += k.length * 2 + JSON.stringify(cache[k]).length;
+    if (size > AI_CACHE_MAX_BYTES) {
+      const sorted = keys.sort((a, b) => (cache[a]?.deepCachedAt || 0) - (cache[b]?.deepCachedAt || 0));
+      for (const k of sorted) {
+        size -= k.length * 2 + JSON.stringify(cache[k]).length;
+        delete cache[k];
+        if (size <= AI_CACHE_MAX_BYTES) break;
+      }
+    }
     await chrome.storage.local.set({ aiCache: cache });
   }
 
@@ -228,29 +246,6 @@ const IFLL_STORAGE = (() => {
     const cache = await getAiCache();
     delete cache[en];
     await chrome.storage.local.set({ aiCache: cache });
-  }
-
-  /* ── Stats ──
-     replaceCount = distinct words replaced today (deduped by injector via Set)
-     clickedCount = tooltip cards the user actually opened — the real "learned" metric
-     totalLearned  = clickedCount (exposure ≠ learning; a card only counts when opened) */
-  async function trackStat(type, count = 1) {
-    const { dailyStats } = await get();
-    const today = new Date().toISOString().slice(0, 10);
-    if (dailyStats.date !== today) {
-      dailyStats.date = today;
-      dailyStats.replaceCount = 0;
-      dailyStats.annotateCount = 0;
-      dailyStats.translateChars = 0;
-      dailyStats.clickedCount = 0;
-      dailyStats.totalLearned = 0;
-    }
-    if (type === 'replace') dailyStats.replaceCount += count;
-    else if (type === 'annotate') dailyStats.annotateCount += count;
-    else if (type === 'translate') dailyStats.translateChars += count;
-    else if (type === 'click') dailyStats.clickedCount += count;
-    dailyStats.totalLearned = dailyStats.clickedCount;
-    await set({ dailyStats });
   }
 
   function buildFullBank(wordBank, userWords) {
@@ -266,6 +261,6 @@ const IFLL_STORAGE = (() => {
     getDailyWords, ensureDailyWords, addPhrase, getPhraseMap,
     markKnown, markUnknown, addToReview, scoreReview, getReviewCount, addUserWord,
     getAiCache, getAiCacheEntry, setAiCacheEntry, clearAiCache,
-    trackStat, buildFullBank, DEFAULTS, migrateBigDataToLocal, LOCAL_KEYS
+    buildFullBank, DEFAULTS, migrateBigDataToLocal, LOCAL_KEYS
   };
 })();
