@@ -224,11 +224,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   /* ── Save API ── */
   saveApiBtn.addEventListener('click', async () => {
+    const prev = await IFLL_STORAGE.get();
+    const newKey = apiKey.value.trim();
+    const newEp = await getEffectiveEndpoint();
+    const newMdl = apiModel.value.trim();
     await IFLL_STORAGE.set({
-      apiKey: apiKey.value.trim(),
-      apiEndpoint: await getEffectiveEndpoint(),
-      apiModel: apiModel.value.trim()
+      apiKey: newKey,
+      apiEndpoint: newEp,
+      apiModel: newMdl
     });
+    /* Broadcast only when something actually changed — a redundant save would
+       otherwise re-inject every replace page (stat inflation) and re-translate
+       every translate page (double billing). */
+    const changed = newKey !== (prev.apiKey || '') || newEp !== (prev.apiEndpoint || '') || newMdl !== (prev.apiModel || '');
+    if (changed) await notifyTabsSettingsChanged();
     saveApiBtn.textContent = '已保存';
     setTimeout(() => { saveApiBtn.textContent = '保存'; }, 1500);
   });
@@ -297,13 +306,88 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!file) return;
     try {
       const data = JSON.parse(await file.text());
-      const allowed = ['enabled','defaultMode','siteModes','frequency','level','apiKey','apiEndpoint','apiModel','voiceName','excludedSites','knownWords','reviewQueue','userWords','dailyStats','phraseMap','dailyWords','dailyWordDate','dailyWordCount'];
+      const allowed = ['enabled','defaultMode','siteModes','frequency','level','apiKey','apiEndpoint','apiModel','voiceName','excludedSites','knownWords','reviewQueue','userWords','dailyStats','phraseMap','dailyWords','dailyWordDate','dailyWordCount','tooltipTheme','customActions'];
       const filtered = {};
       for (const k of allowed) if (k in data) filtered[k] = data[k];
       await IFLL_STORAGE.set(filtered);
       importBtn.textContent = '已导入';
       setTimeout(() => { importBtn.textContent = '导入'; }, 2000);
     } catch (e) { importBtn.textContent = '出错'; }
+  });
+
+  /* ── Custom AI actions ── */
+  const actName = document.getElementById('actName');
+  const actAdd = document.getElementById('actAdd');
+  const actEditor = document.getElementById('actEditor');
+  const actPrompt = document.getElementById('actPrompt');
+  const actFields = document.getElementById('actFields');
+  const actSave = document.getElementById('actSave');
+  const actDel = document.getElementById('actDel');
+  const actEditId = document.getElementById('actEditId');
+  const customActionsList = document.getElementById('customActionsList');
+  let editingActionId = null;
+
+  /* Escape user-supplied names/ids before innerHTML (import chain is outside the trusted boundary) */
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  async function renderCustomActions() {
+    const s = await IFLL_STORAGE.get();
+    const acts = s.customActions || [];
+    if (!acts.length) { customActionsList.innerHTML = '<span class="p-empty">暂无自定义动作</span>'; return; }
+    customActionsList.innerHTML = acts.map(a =>
+      `<div class="p-action-item"><span>${esc(a.name)}</span><button class="p-btn p-btn-sm p-btn-ghost" data-act-edit="${esc(a.id)}">编辑</button></div>`
+    ).join('');
+    customActionsList.querySelectorAll('[data-act-edit]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const act = acts.find(a => a.id === btn.dataset.actEdit);
+        if (!act) return;
+        editingActionId = act.id;
+        actName.value = act.name;
+        actPrompt.value = act.prompt || '';
+        actFields.value = (act.fields || []).join(', ');
+        actDel.style.display = 'inline-block';
+        actEditId.textContent = act.id;
+        actEditor.style.display = 'block';
+      });
+    });
+  }
+  renderCustomActions();
+
+  actAdd.addEventListener('click', () => {
+    editingActionId = null;
+    actName.value = ''; actPrompt.value = ''; actFields.value = '';
+    actDel.style.display = 'none';
+    actEditId.textContent = '';
+    actEditor.style.display = 'block';
+    actName.focus();
+  });
+
+  actSave.addEventListener('click', async () => {
+    const name = actName.value.trim();
+    if (!name) { actName.focus(); return; }
+    const s = await IFLL_STORAGE.get();
+    const acts = s.customActions || [];
+    const fields = actFields.value.split(/[,，]/).map(f => f.trim()).filter(Boolean);
+    if (editingActionId) {
+      const act = acts.find(a => a.id === editingActionId);
+      if (act) { act.name = name; act.prompt = actPrompt.value; act.fields = fields; }
+    } else {
+      acts.push({ id: 'act_' + Date.now().toString(36), name, prompt: actPrompt.value, fields });
+    }
+    await IFLL_STORAGE.set({ customActions: acts });
+    actEditor.style.display = 'none';
+    renderCustomActions();
+  });
+
+  actDel.addEventListener('click', async () => {
+    if (!editingActionId) return;
+    const s = await IFLL_STORAGE.get();
+    const acts = (s.customActions || []).filter(a => a.id !== editingActionId);
+    await IFLL_STORAGE.set({ customActions: acts });
+    actEditor.style.display = 'none';
+    renderCustomActions();
   });
 
   /* ── Batch deep analysis pre-processing ── */
@@ -340,26 +424,72 @@ document.addEventListener('DOMContentLoaded', async () => {
     const total = batch.length;
 
     let done = 0;
-    for (const w of batch) {
-      if (batchAbort) break;
-      try {
-        const result = await Promise.race([
-          chrome.runtime.sendMessage({ type: 'IFLL_AI_DEEP_ANALYSIS', en: w.en, zh: w.zh, def: w.def, apiKey: s.apiKey, apiEndpoint: s.apiEndpoint, apiModel: s.apiModel }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000))
-        ]);
-        if (result && !result.error) {
-          const hasData = (result.synonyms?.length || result.antonyms?.length ||
-                          result.collocations?.length || result.usage || result.examples?.length);
-          if (hasData) {
-            await IFLL_STORAGE.setAiCacheEntry(w.en, { deep: result, deepCachedAt: Date.now() });
+    const { apiKey: ak, apiEndpoint: ep, apiModel: mdl } = s;
+    /* Cache shape MUST match injector's cacheIfUsable (deep without examples
+       nested + top-level examples) — otherwise the tooltip hit condition
+       `cacheEntry?.deep && cacheEntry?.examples?.length` never matches and
+       every prefetched word gets re-fetched (double billing). */
+    const cacheEntryFor = (r) => ({
+      deep: { synonyms: r.synonyms, antonyms: r.antonyms, collocations: r.collocations, usage: r.usage },
+      deepCachedAt: Date.now(),
+      examples: r.examples || [],
+      examplesCachedAt: Date.now()
+    });
+    /* ≥10 words → merged batch API (one call per 40-word chunk, 10× fewer requests) */
+    const BATCH_CHUNK = 40;
+    if (batch.length >= 10) {
+      for (let i = 0; i < batch.length && !batchAbort; i += BATCH_CHUNK) {
+        const chunk = batch.slice(i, i + BATCH_CHUNK);
+        try {
+          const result = await Promise.race([
+            chrome.runtime.sendMessage({ type: 'IFLL_BATCH_DEEP', words: chunk, apiKey: ak, apiEndpoint: ep, apiModel: mdl }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 95000))
+          ]);
+          if (result && !result.error && Array.isArray(result.results)) {
+            /* Map by normalized word first; fall back to array index (AI may
+               normalize case or pad whitespace — never write to a hallucinated key) */
+            const byWord = new Map(result.results.map(r => [(r.word || '').trim().toLowerCase(), r]));
+            /* Index fallback ONLY when result count matches chunk count — if the
+               AI omitted words, indexes misalign and would write the wrong
+               word's data under the wrong key. */
+            const idxSafe = result.results.length === chunk.length;
+            for (let j = 0; j < chunk.length; j++) {
+              const r = byWord.get(chunk[j].en.trim().toLowerCase()) || (idxSafe ? result.results[j] : null);
+              if (!r) continue;
+              const hasData = (r.synonyms?.length || r.antonyms?.length ||
+                              r.collocations?.length || r.usage || r.examples?.length);
+              if (!hasData) continue;
+              try { await IFLL_STORAGE.setAiCacheEntry(chunk[j].en, cacheEntryFor(r)); }
+              catch (_) { /* one word's storage failure must not drop the rest */ }
+            }
           }
-        }
-      } catch (_) { /* skip errors, continue */ }
-      done++;
-      fillEl.style.width = (done / total * 100) + '%';
-      textEl.textContent = done + '/' + total;
-      /* Small delay between requests to avoid rate limiting */
-      if (done < total && !batchAbort) await new Promise(r => setTimeout(r, 800));
+        } catch (_) { /* skip chunk errors, continue */ }
+        done = Math.min(batch.length, i + chunk.length);
+        fillEl.style.width = (done / total * 100) + '%';
+        textEl.textContent = done + '/' + total;
+        if (!batchAbort) await new Promise(r => setTimeout(r, 800));
+      }
+    } else {
+      for (const w of batch) {
+        if (batchAbort) break;
+        try {
+          const result = await Promise.race([
+            chrome.runtime.sendMessage({ type: 'IFLL_AI_DEEP_ANALYSIS', en: w.en, zh: w.zh, def: w.def, apiKey: ak, apiEndpoint: ep, apiModel: mdl }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000))
+          ]);
+          if (result && !result.error) {
+            const hasData = (result.synonyms?.length || result.antonyms?.length ||
+                            result.collocations?.length || result.usage || result.examples?.length);
+            if (hasData) {
+              await IFLL_STORAGE.setAiCacheEntry(w.en, cacheEntryFor(result));
+            }
+          }
+        } catch (_) { /* skip errors, continue */ }
+        done++;
+        fillEl.style.width = (done / total * 100) + '%';
+        textEl.textContent = done + '/' + total;
+        if (done < total && !batchAbort) await new Promise(r => setTimeout(r, 800));
+      }
     }
 
     startBtn.style.display = 'inline-block';

@@ -79,7 +79,7 @@ chrome.runtime.onConnect.addListener((port) => {
           ],
           temperature: 0.5, max_tokens: 1200, stream: true,
           response_format: { type: 'json_object' },
-          thinking: { type: 'disabled' }
+          ...(isDeepSeekLike(apiEndpoint, apiModel) ? { thinking: { type: 'disabled' } } : {})
         }),
         signal: controller.signal
       });
@@ -134,11 +134,11 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 });
 
-/* ---- Shared fetch with timeout ---- */
-async function apiFetch(endpoint, path, headers, body) {
+/* ---- Shared fetch with timeout (default 25s, overridable for batch) ---- */
+async function apiFetch(endpoint, path, headers, body, timeout = 25000) {
   const baseUrl = (endpoint || 'https://api.deepseek.com').replace(/\/+$/, '');
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25000);
+  const timer = setTimeout(() => controller.abort(), timeout);
   try {
     return await fetch(baseUrl + path, {
       method: body ? 'POST' : 'GET',
@@ -147,6 +147,19 @@ async function apiFetch(endpoint, path, headers, body) {
       signal: controller.signal
     });
   } finally { clearTimeout(timer); }
+}
+
+/* DeepSeek-family endpoints must disable thinking: V4 Flash is a reasoning
+   model — enabled thinking burns the entire token budget with zero content
+   output. But strict OpenAI-compatible endpoints reject unknown params with
+   HTTP 400, so only attach the param for providers that need it.
+   Empty endpoint falls back to the DeepSeek default (same as apiFetch);
+   model-name gating covers custom proxies that serve DeepSeek models. */
+function isDeepSeekLike(endpoint, model) {
+  const e = endpoint || 'https://api.deepseek.com';
+  /* Model gating uses the same default as request bodies (apiModel || 'deepseek-v4-flash') */
+  const m = model || 'deepseek-v4-flash';
+  return /deepseek|opencode/i.test(e) || /deepseek/i.test(m);
 }
 
 /* ---- Extract content from API response (handles reasoning models) ---- */
@@ -228,7 +241,7 @@ async function handleCombinedAnalysis(en, zh, def, apiKey, apiEndpoint, apiModel
       ],
       temperature: 0.5, max_tokens: 1200,
       response_format: { type: 'json_object' },
-      thinking: { type: 'disabled' }
+      ...(isDeepSeekLike(apiEndpoint, apiModel) ? { thinking: { type: 'disabled' } } : {})
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => 'unknown');
@@ -267,7 +280,7 @@ Format: {"examples":[{"en":"natural English sentence","cn":"用**目标词**的�
         { role: 'user', content: `Word: "${en}" (Chinese: ${zh}). Generate 3 example sentences.` }
       ],
       temperature: 0.7, max_tokens: 800,
-      thinking: { type: 'disabled' }
+      ...(isDeepSeekLike(apiEndpoint, apiModel) ? { thinking: { type: 'disabled' } } : {})
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => 'unknown');
@@ -299,7 +312,7 @@ Accuracy > quantity; never fabricate.` },
         { role: 'user', content: `Word: "${en}" (${zh}, definition: ${def})` }
       ],
       temperature: 0.5, max_tokens: 1200,
-      thinking: { type: 'disabled' }
+      ...(isDeepSeekLike(apiEndpoint, apiModel) ? { thinking: { type: 'disabled' } } : {})
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => 'unknown');
@@ -329,7 +342,7 @@ async function handleAiTranslate(text, apiKey, apiEndpoint, apiModel) {
         { role: 'user', content: text }
       ],
       temperature: 0.3, max_tokens: Math.min(4096, Math.max(1024, Math.round(text.length * 1.2))),
-      thinking: { type: 'disabled' }
+      ...(isDeepSeekLike(apiEndpoint, apiModel) ? { thinking: { type: 'disabled' } } : {})
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => 'unknown');
@@ -355,7 +368,7 @@ async function testApiConnection(apiKey, apiEndpoint, apiModel) {
       model: apiModel || 'deepseek-v4-flash',
       messages: [{ role: 'user', content: 'Say "ok" in one word.' }],
       max_tokens: 5,
-      thinking: { type: 'disabled' }
+      ...(isDeepSeekLike(apiEndpoint, apiModel) ? { thinking: { type: 'disabled' } } : {})
     });
     if (resp.ok) return { success: true };
     const errText = await resp.text().catch(() => 'unknown');
@@ -394,7 +407,7 @@ async function handleCustomAction(action, en, zh, def, apiKey, apiEndpoint, apiM
       : " Return the result as concise plain text. No markdown.";
     const resp = await apiFetch(apiEndpoint, "/chat/completions", {
       "Content-Type": "application/json", "Authorization": "Bearer " + apiKey
-    }, { model: apiModel || "deepseek-v4-flash", messages: [{ role: "system", content: prompt + fmt }, { role: "user", content: en + (zh ? " (" + zh + ")" : "") }], max_tokens: 600, temperature: 0.5, thinking: { type: "disabled" } });
+    }, { model: apiModel || "deepseek-v4-flash", messages: [{ role: "system", content: prompt + fmt }, { role: "user", content: en + (zh ? " (" + zh + ")" : "") }], max_tokens: 600, temperature: 0.5, ...(isDeepSeekLike(apiEndpoint, apiModel) ? { thinking: { type: 'disabled' } } : {}) });
     if (!resp.ok) return { error: "HTTP " + resp.status };
     const data = await resp.json(); const content = getContent(data);
     if (!content) return { error: "empty response" };
@@ -413,7 +426,7 @@ async function handleSelToolbar(action, text, apiKey, apiEndpoint, apiModel) {
       : (isChinese ? "Translate to English. Return ONLY the translation." : "Translate to natural Chinese. Return ONLY the translation.");
     const resp = await apiFetch(apiEndpoint, "/chat/completions", {
       "Content-Type": "application/json", "Authorization": "Bearer " + apiKey
-    }, { model: apiModel || "deepseek-v4-flash", messages: [{ role: "system", content: prompt }, { role: "user", content: text }], max_tokens: 180, temperature: 0.3, thinking: { type: "disabled" } });
+    }, { model: apiModel || "deepseek-v4-flash", messages: [{ role: "system", content: prompt }, { role: "user", content: text }], max_tokens: 180, temperature: 0.3, ...(isDeepSeekLike(apiEndpoint, apiModel) ? { thinking: { type: 'disabled' } } : {}) });
     if (!resp.ok) return { error: "HTTP " + resp.status };
     const data = await resp.json();
     return { text: getContent(data) || "no response" };
@@ -425,10 +438,10 @@ async function handleBatchDeep(words, apiKey, apiEndpoint, apiModel) {
   if (!apiKey || !words?.length) return { error: words ? "no api key" : "no words" };
   try {
     const wordList = words.map(w => '"' + w.en + '" (' + w.zh + ")").join(", ");
-    const prompt = 'Lexicographer analysis. Accuracy > quantity — empty arrays are better than wrong data. Return ONLY JSON: {"results":[{"word":"...","synonyms":["s"],"antonyms":[],"collocations":[],"usage":"Chinese note"}]}.';
+    const prompt = 'Lexicographer analysis. Accuracy > quantity — empty arrays are better than wrong data. Return ONLY JSON: {"results":[{"word":"...","synonyms":["s"],"antonyms":[],"collocations":[],"usage":"Chinese note","examples":[{"en":"short natural sentence","cn":"地道中文, **词**加粗"}]}]}. Exactly 1 short example per word.';
     const resp = await apiFetch(apiEndpoint, "/chat/completions", {
       "Content-Type": "application/json", "Authorization": "Bearer " + apiKey
-    }, { model: apiModel || "deepseek-v4-flash", messages: [{ role: "system", content: prompt }, { role: "user", content: "Words: " + wordList }], max_tokens: 3000, temperature: 0.4, thinking: { type: "disabled" } });
+    }, { model: apiModel || "deepseek-v4-flash", messages: [{ role: "system", content: prompt }, { role: "user", content: "Words: " + wordList }], max_tokens: 5000, temperature: 0.4, ...(isDeepSeekLike(apiEndpoint, apiModel) ? { thinking: { type: 'disabled' } } : {}) }, 90000);
     if (!resp.ok) return { error: "HTTP " + resp.status };
     const dt = await resp.json(); const ct = getContent(dt);
     if (!ct) return { error: "empty response" };
