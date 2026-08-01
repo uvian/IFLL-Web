@@ -368,7 +368,7 @@ const IFLL_INJECTOR = (() => {
 
   function createTranslatePanel(text) {
     const div = document.createElement('div');
-    div.className = 'ifll-tt-sentence';
+    div.className = 'ifll-trans-panel';
     div.textContent = text;
     return div;
   }
@@ -571,7 +571,10 @@ const IFLL_INJECTOR = (() => {
      happens to be open). */
   async function fetchCombinedAnalysis(en, zh, def, silent = false) {
     const cacheEntry = await IFLL_STORAGE.getAiCacheEntry(en);
-    if (cacheEntry?.deep && cacheEntry?.examples?.length) {
+    /* deep alone qualifies as cached — examples are optional (batch-prefetched
+       words may have none). Requiring examples?.length too would re-fetch and
+       double-bill every word whose entry lacks examples. */
+    if (cacheEntry?.deep) {
       return { success: true, data: cacheEntry.deep, examples: cacheEntry.examples, cached: true };
     }
     const s = await IFLL_STORAGE.get();
@@ -792,7 +795,7 @@ const IFLL_INJECTOR = (() => {
     const acts = sCfg.customActions || [];
     if (acts.length) {
       html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-label">自定义</div><div class="ifll-tt-custom" id="ifll-custom-area">`;
-      acts.forEach(a => html += `<button class="ifll-btn-custom" data-action-id="${a.id}">${a.name}</button>`);
+      acts.forEach(a => html += `<button class="ifll-btn-custom" data-action-id="${htmlEncode(a.id)}">${htmlEncode(a.name)}</button>`);
       html += `</div>`;
     }
     html += `<div class="ifll-tt-divider"></div><div class="ifll-tt-actions">

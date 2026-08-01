@@ -28,7 +28,8 @@
           apiKey: s.apiKey, apiEndpoint: s.apiEndpoint, apiModel: s.apiModel
         });
         if (result?.text) { const tip = document.createElement('div'); tip.className = 'ifll-sel-tip'; tip.textContent = result.text.slice(0, 200); selBar.appendChild(tip); setTimeout(() => tip.remove(), 5000); }
-      } catch (_) { btn.textContent = '⚠'; setTimeout(() => btn.textContent = action === 'translate' ? '译' : '解', 2000); }
+        else { btn.textContent = '⚠'; setTimeout(() => btn.textContent = { translate: '译', explain: '解', speak: '音', copy: '抄' }[action] || '译', 2000); }
+      } catch (_) { btn.textContent = '⚠'; setTimeout(() => btn.textContent = { translate: '译', explain: '解', speak: '音', copy: '抄' }[action] || '译', 2000); }
     });
     document.body.appendChild(selBar);
   }
@@ -130,8 +131,17 @@
           IFLL_INJECTOR.destroy(); return;
         }
       }
+      /* Restart with the site's persisted mode — NOT hardcoded replace.
+         Otherwise changing settings silently flips annotate/translate/off
+         sites back into replace injection. */
       IFLL_INJECTOR.destroy();
-      IFLL_INJECTOR.init();
+      (async () => {
+        /* Session-level "skip" (welcome prompt timeout) must also suppress restart */
+        if (sessionStorage.getItem('ifll_decision_' + window.location.hostname) === 'off') return;
+        const mode = await IFLL_STORAGE.getModeForHost(window.location.hostname);
+        if (mode === 'off') return;
+        IFLL_INJECTOR.start(mode);
+      })();
     }
     if (message.type === 'IFLL_MODE_CHANGED') {
       sessionStorage.setItem('ifll_decision_' + window.location.hostname, message.mode);
