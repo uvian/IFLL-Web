@@ -916,20 +916,40 @@ const IFLL_INJECTOR = (() => {
   }
 
   let _tlsDone = false;
-  /* Capture-phase link guard: some pages (SPA frameworks) stopPropagation in their
-     own bubble listeners, so the bubble-phase guard in showTooltip never fires and
-     the link navigates. Capturing at document level runs BEFORE any page listener. */
+  /* Capture-phase link guard: page scripts (SPA frameworks) navigate in their
+     own bubble listeners, and some sites even on mousedown. preventDefault alone
+     blocks the browser's default navigation but NOT JS-driven navigation
+     (React onClick → history.push) — only capture-phase stopPropagation stops
+     the event from ever reaching page listeners. We show the tooltip right here
+     so the bubble-phase showTooltip never needs to fire for link words. */
   function onDocClickCapture(e) {
     const t = e.target;
     if (!t || t.nodeType !== Node.ELEMENT_NODE) return;
     const span = t.closest?.('.ifll-word, .ifll-annotated');
-    if (span && span.closest('a')) e.preventDefault();
+    if (span && span.closest('a')) {
+      e.preventDefault();
+      e.stopPropagation();
+      showTooltip(e);
+    }
+  }
+  /* Sites that navigate on mousedown via their own JS listeners — preventDefault
+     alone doesn't stop JS navigation, only stopPropagation does. No pointerdown
+     guard: iOS Safari treats pointerdown preventDefault as canceling the click
+     entirely, which would break tap-to-show-tooltip on mobile. */
+  function onDocMouseDownCapture(e) {
+    const t = e.target;
+    if (!t || t.nodeType !== Node.ELEMENT_NODE) return;
+    if (t.closest?.('.ifll-word, .ifll-annotated')?.closest('a')) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
   }
   function setupTooltipListeners() {
     if (_tlsDone) return;
     document.addEventListener('click', showTooltip);
     document.addEventListener('click', hideTooltip, true);
     document.addEventListener('click', onDocClickCapture, true);
+    document.addEventListener('mousedown', onDocMouseDownCapture, true);
     _tlsDone = true;
   }
 

@@ -438,8 +438,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     /* ≥10 words → merged batch API (one call per 40-word chunk, 10× fewer requests) */
     const BATCH_CHUNK = 40;
     if (batch.length >= 10) {
+      const totalChunks = Math.ceil(batch.length / BATCH_CHUNK);
       for (let i = 0; i < batch.length && !batchAbort; i += BATCH_CHUNK) {
         const chunk = batch.slice(i, i + BATCH_CHUNK);
+        const chunkNo = Math.floor(i / BATCH_CHUNK) + 1;
+        /* Smooth visual progress while the merged request runs — a 40-word
+           batch call takes 10-30s and would otherwise look frozen at 0%. */
+        const basePct = i / total * 100;
+        const targetPct = Math.min(100, (i + chunk.length) / total * 100);
+        let visual = basePct;
+        textEl.textContent = `解析中 ${chunkNo}/${totalChunks} 批…`;
+        const iv = setInterval(() => {
+          if (batchAbort) { clearInterval(iv); return; }   /* 停止 → bar freezes immediately */
+          visual += Math.max(0.3, (targetPct - visual) * 0.05);
+          if (visual < targetPct - 0.5) fillEl.style.width = visual + '%';
+        }, 150);
         try {
           const result = await Promise.race([
             chrome.runtime.sendMessage({ type: 'IFLL_BATCH_DEEP', words: chunk, apiKey: ak, apiEndpoint: ep, apiModel: mdl }),
@@ -464,6 +477,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
           }
         } catch (_) { /* skip chunk errors, continue */ }
+        clearInterval(iv);
         done = Math.min(batch.length, i + chunk.length);
         fillEl.style.width = (done / total * 100) + '%';
         textEl.textContent = done + '/' + total;
@@ -494,8 +508,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     startBtn.style.display = 'inline-block';
     stopBtn.style.display = 'none';
+    /* Disable briefly so clicking the 完成/已停止 feedback can't restart a run */
+    startBtn.disabled = true;
     startBtn.textContent = batchAbort ? '已停止' : '完成';
-    setTimeout(() => { startBtn.textContent = '开始'; }, 3000);
+    setTimeout(() => { startBtn.disabled = false; startBtn.textContent = '开始'; }, 3000);
   });
 
   document.getElementById('batchStop').addEventListener('click', () => {
