@@ -431,6 +431,17 @@
   opacity: 0.6;
 }
 
+/* ── Highlight API 标注（非侵入式 paint；Firefox 140+ / Chrome 105+）──
+   ::highlight 只支持 paint-only 属性（background-color/color/text-decoration/
+   text-shadow），不支持 border/布局属性 — IFLL 标注样式恰好是虚线下划线+原色，
+   零妥协。无 DOM 写入：React 重渲染抹不掉、不触发 MutationObserver、destroy
+   无需还原文本。限制：无 hover 效果、无 cursor:help（伪元素不支持盒属性）。 */
+::highlight(ifll-annotate) {
+  text-decoration: underline dotted #2563eb;
+  text-underline-offset: 3px;
+  color: inherit;
+}
+
 /* ── Translation panel ── */
 .ifll-trans-panel {
   margin: 4px 0 8px 0;

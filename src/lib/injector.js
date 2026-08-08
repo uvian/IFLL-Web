@@ -239,7 +239,15 @@ const IFLL_INJECTOR = (() => {
     node.parentNode.replaceChild(fragment, node);
   }
 
-  /* ---- Annotate mode: word-based lookup (English→Chinese) ---- */
+  /* ── Annotate mode: word-based lookup (English→Chinese) ──
+     两条路径：CSS Custom Highlight API（Chrome 105+ / Firefox 140+，零 DOM 写入，
+     不分裂页面文本节点、React 重渲染抹不掉、不触发自身 MutationObserver、destroy
+     无需还原文本）与 <span> 包装回退（老浏览器）。每帧只选一种，绝不混用。 */
+  const ANNOTATE_HIGHLIGHT_NAME = 'ifll-annotate';
+  function supportsHighlightApi() {
+    return typeof CSS !== 'undefined' && typeof Highlight === 'function' && !!(CSS.highlights);
+  }
+  let annotateHits = [];   /* [{ range, data }] — highlight 模式的命中表 */
   let enWordBank = null;
   function getEnWordBank() {
     if (enWordBank) return enWordBank;
@@ -252,7 +260,99 @@ const IFLL_INJECTOR = (() => {
     return enWordBank;
   }
 
+  /* 点击命中检测：遍历标注 Range 的 client rects（每行一个 fragment）。
+     页面重渲染后 range 失效 → getClientRects() 为空 → 自动 miss，安全。 */
+  function findAnnotateHit(x, y) {
+    for (const hit of annotateHits) {
+      const rects = hit.range.getClientRects();
+      if (!rects.length) continue;
+      for (const r of rects) {
+        if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return hit;
+      }
+    }
+    return null;
+  }
+
+  /* 重建高亮集合：已知词不再标注（比 legacy 的"变绿"更干净 — 已掌握的词不该打扰阅读） */
+  function rebuildAnnotateHighlights(knownSet) {
+    const ranges = [];
+    for (const hit of annotateHits) {
+      if (knownSet.has(hit.data.zh)) continue;
+      if (!hit.range.startContainer?.isConnected) continue;
+      ranges.push(hit.range);
+    }
+    try {
+      const hl = new Highlight();
+      for (const r of ranges) hl.add(r);
+      CSS.highlights.set(ANNOTATE_HIGHLIGHT_NAME, hl);
+    } catch (_) {}
+  }
+
   function injectAnnotate(settings) {
+    if (supportsHighlightApi()) injectAnnotateHighlight(settings);
+    else injectAnnotateLegacy(settings);
+  }
+
+  /* Highlight API 路径：纯读 DOM，分词建 Range，零写入 */
+  function injectAnnotateHighlight(settings) {
+    const hostname = window.location.hostname;
+    if (!document.body) return;
+    if (settings?.excludedSites?.some(s => hostname === s || hostname.endsWith('.' + s))) return;
+    const bank = getEnWordBank();
+    if (!bank.size) return; // word bank not loaded
+    const knownSet = new Set(settings?.knownWords || []);
+    const level = settings?.level || 'cet4';
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+    let node;
+    const textNodes = [];
+    while ((node = walker.nextNode())) {
+      if (node.parentElement?.closest?.('.ifll-annotated,.ifll-word,.ifll-tooltip,script,style,noscript,code,pre,[contenteditable]')) continue;
+      if (node.parentElement?.closest?.('a')) continue;
+      const text = node.textContent;
+      /* Only process nodes with English words (≥2 letters) */
+      if (!/[a-zA-Z]{3,}/.test(text)) continue;
+      textNodes.push(node);
+    }
+
+    const hits = [];
+    /* 词边界正则：支持连字符/撇号（don't / well-known 一个整体），
+       比 legacy 的 split(/\b/)+清洗更精确。 */
+    const re = /[a-zA-Z]+(?:[-'][a-zA-Z]+)*/g;
+    for (const tn of textNodes) {
+      const text = tn.textContent;
+      let m;
+      re.lastIndex = 0;
+      while ((m = re.exec(text)) !== null) {
+        const word = m[0].toLowerCase();
+        const entry = word.length >= 3 ? bank.get(word) : null;
+        if (!entry) continue;
+        if (knownSet.has(entry.zh)) continue;
+        if (entry.level !== 'all' && getLevelWeight(entry.level) > getLevelWeight(level)) continue;
+        if (hits.length >= 80) break;
+        try {
+          const range = document.createRange();
+          range.setStart(tn, m.index);
+          range.setEnd(tn, m.index + m[0].length);
+          hits.push({
+            range,
+            data: {
+              en: entry.en, zh: entry.zh, def: entry.def || entry.en,
+              pos: entry.pos || 'noun', posCn: entry.pos_cn || '名词',
+              ipa: entry.ipa || '', level: entry.level || '',
+              examples: '[]', examplesCn: '[]'
+            }
+          });
+        } catch (_) { /* range 构建失败跳过该词 */ }
+      }
+      if (hits.length >= 80) break;
+    }
+    annotateHits = hits;
+    rebuildAnnotateHighlights(knownSet);
+    trackStat('annotate', hits.length).catch(() => {});
+  }
+
+  /* <span> 包装回退（无 Highlight API 的浏览器） */
+  function injectAnnotateLegacy(settings) {
     const hostname = window.location.hostname;
     if (!document.body) return;
     if (settings?.excludedSites?.some(s => hostname === s || hostname.endsWith('.' + s))) return;
@@ -766,20 +866,25 @@ const IFLL_INJECTOR = (() => {
 
   async function showTooltip(e) {
     const span = e.target.closest('.ifll-word, .ifll-annotated');
-    if (!span) return;
+    /* Highlight API 标注模式下 DOM 没有 span — 用 Range 矩形命中检测 */
+    let hit = null;
+    if (!span && annotateHits.length) hit = findAnnotateHit(e.clientX, e.clientY);
+    if (!span && !hit) return;
     /* A card the user actually opened = one unit of learning */
     trackStat('click', 1).catch(() => {});
     /* If the replacement word is inside a link, prevent navigation so the tooltip can display */
-    if (span.closest('a')) { e.preventDefault(); e.stopPropagation(); }
-    const rect = span.getBoundingClientRect();
-    const en = span.dataset.en, zh = span.dataset.zh;
-    const def = htmlEncode(span.dataset.def || en);
-    const pos = span.dataset.pos || 'noun', posCn = span.dataset.posCn || '名词';
+    if (span && span.closest('a')) { e.preventDefault(); e.stopPropagation(); }
+    const d = span ? span.dataset : hit.data;
+    /* hit 模式没有元素可定位 — 用点击点附近区域作为锚点 */
+    const rect = span ? span.getBoundingClientRect() : { left: e.clientX - 8, top: e.clientY - 8, bottom: e.clientY + 8, right: e.clientX + 8 };
+    const en = d.en, zh = d.zh;
+    const def = htmlEncode(d.def || en);
+    const pos = d.pos || 'noun', posCn = d.posCn || '名词';
     const posLatin = posLabel(pos);
     let examples = [], examplesCn = [];
-    try { if (span.dataset.examples) examples = JSON.parse(span.dataset.examples); } catch (_) {}
-    try { if (span.dataset.examplesCn) examplesCn = JSON.parse(span.dataset.examplesCn); } catch (_) {}
-    if (!examples.length && span.dataset.example) { examples = [span.dataset.example]; examplesCn = [span.dataset.exampleCn || '']; }
+    try { if (d.examples) examples = JSON.parse(d.examples); } catch (_) {}
+    try { if (d.examplesCn) examplesCn = JSON.parse(d.examplesCn); } catch (_) {}
+    if (!examples.length && d.example) { examples = [d.example]; examplesCn = [d.exampleCn || '']; }
 
     if (!tooltipEl) {
       tooltipEl = document.createElement('div');
@@ -793,7 +898,13 @@ const IFLL_INJECTOR = (() => {
         const wzh = tooltipEl.dataset.zh;
         if (btn.dataset.action === 'known') {
           await IFLL_STORAGE.markKnown(wzh); btn.textContent = '已掌握'; btn.disabled = true;
-          document.querySelectorAll(`.ifll-word[data-zh="${wzh}"], .ifll-annotated[data-zh="${wzh}"]`).forEach(el => el.classList.add('ifll-known'));
+          if (annotateHits.length) {
+            /* Highlight 模式：已掌握的词直接从高亮集合移除 */
+            const s = await IFLL_STORAGE.get();
+            rebuildAnnotateHighlights(new Set(s.knownWords || []));
+          } else {
+            document.querySelectorAll(`.ifll-word[data-zh="${wzh}"], .ifll-annotated[data-zh="${wzh}"]`).forEach(el => el.classList.add('ifll-known'));
+          }
         } else if (btn.dataset.action === 'unknown') {
           await IFLL_STORAGE.markUnknown(wzh);
           await IFLL_STORAGE.addToReview(wzh, tooltipEl.dataset.en);
@@ -808,7 +919,7 @@ const IFLL_INJECTOR = (() => {
         } else if (btn.dataset.action === 'add-word') {
           const s = await IFLL_STORAGE.get();
           const added = await IFLL_STORAGE.addUserWord({
-            zh: wzh, en: tooltipEl.dataset.en, def: span.dataset.def || tooltipEl.dataset.en,
+            zh: wzh, en: tooltipEl.dataset.en, def: tooltipEl.dataset.def || tooltipEl.dataset.en,
             pos, pos_cn: posCn, cat: 'user', level: s.level,
             examples, examplesCn
           });
@@ -828,14 +939,14 @@ const IFLL_INJECTOR = (() => {
       });
     }
 
-    tooltipEl.dataset.zh = zh; tooltipEl.dataset.en = en;
+    tooltipEl.dataset.zh = zh; tooltipEl.dataset.en = en; tooltipEl.dataset.def = d.def || en;
     applyTooltipTheme(tooltipEl);
     let html = `<div class="ifll-tt-handle"></div>
       <div class="ifll-tt-header">
         <div class="ifll-tt-en">${htmlEncode(en)}<button data-action="speak" class="ifll-btn-speak" title="朗读发音"></button></div>
-        <div class="ifll-tt-level">${htmlEncode(span.dataset.level || '')}</div>
+        <div class="ifll-tt-level">${htmlEncode(d.level || '')}</div>
       </div>
-      <div class="ifll-tt-meta">${htmlEncode(zh)}${span.dataset.ipa ? ' · <span class="ifll-tt-ipa">' + htmlEncode(span.dataset.ipa) + '</span>' : ''} · <span class="ifll-tt-pos">${posLatin}</span> ${htmlEncode(posCn)}</div>
+      <div class="ifll-tt-meta">${htmlEncode(zh)}${d.ipa ? ' · <span class="ifll-tt-ipa">' + htmlEncode(d.ipa) + '</span>' : ''} · <span class="ifll-tt-pos">${posLatin}</span> ${htmlEncode(posCn)}</div>
       <div class="ifll-tt-divider"></div>
       <div class="ifll-tt-def">${def}</div>`;
 
@@ -1223,6 +1334,12 @@ const IFLL_INJECTOR = (() => {
     stopObserver(); removeTooltip();
     translateAborted = true;   /* cancel in-flight translation callbacks */
     replacedStatSeen = new Set();  /* re-visits count fresh */
+    /* Highlight API 标注：清 paint + 命中表。零 DOM 写入意味着无需还原文本 —
+       这正是它优于 span 包装的地方。 */
+    if (annotateHits.length) {
+      try { CSS.highlights?.delete?.(ANNOTATE_HIGHLIGHT_NAME); } catch (_) {}
+      annotateHits = [];
+    }
     /* Remove floating ball and selection bar remnants */
     if (floatBall?.parentNode) { floatBall.parentNode.removeChild(floatBall); floatBall = null; }
     const selBarEl = document.getElementById('ifll-sel-bar');
