@@ -1130,6 +1130,13 @@ const IFLL_INJECTOR = (() => {
     _currentMode = mode;
     if (!floatBall) return;
     floatBall.className = 'ifll-float ifll-float-' + mode;
+    /* 颜色之外补文字提示 — 只看圆点颜色无法判断当前模式 */
+    floatBall.title = {
+      replace: 'IFLL: 替换学习（点击切换）',
+      annotate: 'IFLL: 标注学习（点击切换）',
+      translate: 'IFLL: 对比翻译（点击切换）',
+      off: 'IFLL: 已关闭（点击切换）'
+    }[mode] || 'IFLL 模式切换';
   }
 
   async function start(mode) {

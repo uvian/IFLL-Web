@@ -27,14 +27,14 @@
     selBar = document.createElement('div');
     selBar.id = 'ifll-sel-bar';
     selBar.className = 'ifll-sel-bar';
-    selBar.innerHTML = `<button data-sel-action="translate" title="翻译">译</button><button data-sel-action="explain" title="AI 解释">解</button><button data-sel-action="speak" title="朗读">音</button><button data-sel-action="copy" title="复制">抄</button>`;
+    selBar.innerHTML = `<button data-sel-action="translate" title="翻译">翻译</button><button data-sel-action="explain" title="AI 解释">解释</button><button data-sel-action="speak" title="朗读">朗读</button><button data-sel-action="copy" title="复制">复制</button>`;
     selBar.addEventListener('click', async (e) => {
       const btn = e.target.closest('button');
       if (!btn) return;
       const action = btn.dataset.selAction;
       const text = window.getSelection().toString().trim();
       if (!text) return;
-      if (action === 'copy') { const ok = await copyText(text); btn.textContent = ok ? '已复制' : '失败'; setTimeout(() => btn.textContent = '抄', 1500); return; }
+      if (action === 'copy') { const ok = await copyText(text); btn.textContent = ok ? '已复制' : '失败'; setTimeout(() => btn.textContent = '复制', 1500); return; }
       if (action === 'speak') { window.speechSynthesis?.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = text.match(/[\u4e00-\u9fff]/) ? 'zh-CN' : 'en-US'; u.rate = 0.9; window.speechSynthesis?.speak(u); return; }
       try {
         btn.textContent = '...';
@@ -44,8 +44,8 @@
           apiKey: s.apiKey, apiEndpoint: s.apiEndpoint, apiModel: s.apiModel
         });
         if (result?.text) { const tip = document.createElement('div'); tip.className = 'ifll-sel-tip'; tip.textContent = result.text.slice(0, 200); selBar.appendChild(tip); setTimeout(() => tip.remove(), 5000); }
-        else { btn.textContent = '⚠'; setTimeout(() => btn.textContent = { translate: '译', explain: '解', speak: '音', copy: '抄' }[action] || '译', 2000); }
-      } catch (_) { btn.textContent = '⚠'; setTimeout(() => btn.textContent = { translate: '译', explain: '解', speak: '音', copy: '抄' }[action] || '译', 2000); }
+        else { btn.textContent = '⚠'; setTimeout(() => btn.textContent = { translate: '翻译', explain: '解释', speak: '朗读', copy: '复制' }[action] || '翻译', 2000); }
+      } catch (_) { btn.textContent = '⚠'; setTimeout(() => btn.textContent = { translate: '翻译', explain: '解释', speak: '朗读', copy: '复制' }[action] || '翻译', 2000); }
     });
     document.body.appendChild(selBar);
   }
@@ -82,9 +82,9 @@
             <span class="ifll-prompt-desc">选择一种模式开始学习</span>
           </span>
           <span class="ifll-prompt-actions">
-            <button data-mode="replace" class="ifll-prompt-btn ifll-prompt-btn-primary">🔄 替换</button>
-            <button data-mode="annotate" class="ifll-prompt-btn ifll-prompt-btn-secondary">✏️ 标注</button>
-            <button data-mode="translate" class="ifll-prompt-btn ifll-prompt-btn-secondary">📑 翻译</button>
+            <button data-mode="replace" class="ifll-prompt-btn ifll-prompt-btn-primary">替换</button>
+            <button data-mode="annotate" class="ifll-prompt-btn ifll-prompt-btn-secondary">标注</button>
+            <button data-mode="translate" class="ifll-prompt-btn ifll-prompt-btn-secondary">翻译</button>
             <button data-mode="off" class="ifll-prompt-btn ifll-prompt-btn-skip">跳过</button>
           </span>
         </div>
@@ -102,17 +102,11 @@
         setTimeout(async () => {
           bar.remove();
           sessionStorage.setItem('ifll_decision_' + hostname, mode);
-          /* Only persist if the user actively clicked — timeout default is transient */
-          if (!clicked && mode === 'off') { resolve('off'); return; }
-          if (mode === 'off') {
-            const { excludedSites = [] } = await IFLL_STORAGE.get();
-            if (!excludedSites.includes(hostname)) {
-              excludedSites.push(hostname);
-              await IFLL_STORAGE.set({ excludedSites });
-            }
-          } else {
-            await IFLL_STORAGE.setModeForHost(hostname, mode);
-          }
+          /* 点击"跳过"与超时一致：仅本次会话不注入，不写入排除列表。
+             排除是持久化操作，应由弹窗"排除当前"或卡片"排除此站"明确执行 —
+             否则用户点一下跳过就把整个网站永久拉黑，且自己毫不知情。 */
+          if (mode === 'off') { resolve('off'); return; }
+          await IFLL_STORAGE.setModeForHost(hostname, mode);
           resolve(mode);
         }, 400);
       }

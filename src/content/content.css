@@ -658,11 +658,13 @@
   transform: translateY(-100%);
 }
 .ifll-sel-bar button {
-  width: 30px; height: 28px;
+  min-width: 34px; padding: 0 8px;
+  height: 28px;
   border: none; background: transparent;
-  font-size: 13px; color: #6B6560;
+  font-size: 12px; color: #6B6560;
   cursor: pointer; border-radius: 4px;
   transition: all 0.12s;
+  white-space: nowrap;
 }
 .ifll-sel-bar button:hover { background: #E8EDF5; color: #2E5090; }
 .ifll-sel-tip {
