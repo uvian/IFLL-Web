@@ -316,6 +316,32 @@ const IFLL_INJECTOR = (() => {
   const TRANSLATE_CACHE_MAX = 200;
   const AI_EXAMPLES_CACHE_TTL = 30 * 86400000; // 30 days
   let translateAborted = false;
+
+  /* 翻译缓存：内存 Map（本页快速命中）→ IndexedDB（跨页/跨刷新，SW 扩展 origin）。
+     之前只存内存，刷新页面后同样的段落要重新调用 AI 翻译 — 烧钱。 */
+  function trimTranslateCache() {
+    while (translateCache.size > TRANSLATE_CACHE_MAX) {
+      translateCache.delete(translateCache.keys().next().value);
+    }
+  }
+  function rememberTranslation(key, translation) {
+    translateCache.set(key, translation);
+    trimTranslateCache();
+    /* fire-and-forget 持久化 — 写失败不影响本次展示 */
+    chrome.runtime.sendMessage({ type: 'IFLL_TRANSLATE_CACHE_SET', key, value: translation }).catch(() => {});
+  }
+  async function getCachedTranslation(key) {
+    const mem = translateCache.get(key);
+    if (mem !== undefined) return mem;
+    const r = await chrome.runtime.sendMessage({ type: 'IFLL_TRANSLATE_CACHE_GET', key }).catch(() => null);
+    if (r?.translation) {
+      translateCache.set(key, r.translation);
+      trimTranslateCache();
+      return r.translation;
+    }
+    return null;
+  }
+
   function injectTranslate(settings) {
     const hostname = window.location.hostname;
     if (settings?.excludedSites?.some(s => hostname === s || hostname.endsWith('.' + s))) return;
@@ -347,8 +373,9 @@ const IFLL_INJECTOR = (() => {
         /* Full text as key — the old 80-char prefix slice made long paragraphs
            with the same opening collide and reuse the wrong translation */
         const key = text;
-        if (translateCache.has(key)) {
-          const panel = createTranslatePanel(translateCache.get(key));
+        const cached = await getCachedTranslation(key);
+        if (cached) {
+          const panel = createTranslatePanel(cached);
           p.after(panel);
           translated++;
           trackStat('translate', text.length).catch(() => {});
@@ -363,10 +390,7 @@ const IFLL_INJECTOR = (() => {
             apiModel: settings.apiModel
           });
           if (result?.success && result.translation && !translateAborted) {
-            translateCache.set(key, result.translation);
-            if (translateCache.size > TRANSLATE_CACHE_MAX) {
-              translateCache.delete(translateCache.keys().next().value);
-            }
+            rememberTranslation(key, result.translation);
             const panel = createTranslatePanel(result.translation);
             p.after(panel);
             translated++;
@@ -409,23 +433,28 @@ const IFLL_INJECTOR = (() => {
   /* ── Translate a single text node (A: sentence-level fallback) ── */
   async function translateTextNode(node, text, settings) {
     try {
-      const result = await chrome.runtime.sendMessage({
-        type: 'IFLL_AI_TRANSLATE',
-        text,
-        apiKey: settings.apiKey,
-        apiEndpoint: settings.apiEndpoint,
-        apiModel: settings.apiModel
-      });
-      if (result?.success && result.translation) {
-        const wrapper = document.createElement('span');
-        wrapper.className = 'ifll-replaced ifll-replaced-smooth';
-        const inner = document.createElement('span');
-        inner.className = 'ifll-word';
-        /* Annotate individual words from the translated sentence */
-        annotateWords(inner, result.translation, getEnWordBank());
-        wrapper.appendChild(inner);
-        node.parentNode.replaceChild(wrapper, node);
+      const key = text;
+      let translation = await getCachedTranslation(key);
+      if (!translation) {
+        const result = await chrome.runtime.sendMessage({
+          type: 'IFLL_AI_TRANSLATE',
+          text,
+          apiKey: settings.apiKey,
+          apiEndpoint: settings.apiEndpoint,
+          apiModel: settings.apiModel
+        });
+        if (!result?.success || !result.translation) return;
+        translation = result.translation;
+        rememberTranslation(key, translation);
       }
+      const wrapper = document.createElement('span');
+      wrapper.className = 'ifll-replaced ifll-replaced-smooth';
+      const inner = document.createElement('span');
+      inner.className = 'ifll-word';
+      /* Annotate individual words from the translated sentence */
+      annotateWords(inner, translation, getEnWordBank());
+      wrapper.appendChild(inner);
+      node.parentNode.replaceChild(wrapper, node);
     } catch (_) {}
   }
 

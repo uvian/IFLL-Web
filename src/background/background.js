@@ -54,6 +54,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     IFLL_TEST_API: () => testApiConnection(message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_LIST_MODELS: () => listModels(message.apiKey, message.apiEndpoint),
     IFLL_TRACK_STAT: () => handleTrackStat(message.stat, message.count),
+    IFLL_TRANSLATE_CACHE_GET: () => txCacheGet(message.key),
+    IFLL_TRANSLATE_CACHE_SET: () => txCacheSet(message.key, message.value),
   };
   const fn = handlers[message.type];
   if (fn) { fn().then(sendResponse).catch(err => sendResponse({ error: err.message })); return true; }
@@ -173,6 +175,75 @@ function abortBatch(requestId) {
   const c = batchControllers.get(requestId);
   if (c) { c.abort(); batchControllers.delete(requestId); }
   return Promise.resolve({ aborted: true });
+}
+
+/* ── 翻译缓存持久化 (IndexedDB in SW = extension origin) ──
+   Content script 的 indexedDB 属于页面 origin，会与页面自身的数据库碰撞；
+   SW 的 indexedDB 属于扩展 origin，跨 tab 共享且不与页面库冲突。
+   之前翻译缓存只存内存 Map（刷新即丢）→ 翻页/刷新反复调用 AI 翻译烧钱。 */
+let txDbPromise = null;
+const TX_DB = 'ifll-translate-cache';
+const TX_VER = 1;
+const TX_STORE = 'entries';
+const TX_MAX = 400;   /* 条数上限，超出按 addedAt 删最旧 */
+
+function openTxDb() {
+  if (txDbPromise) return txDbPromise;
+  txDbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(TX_DB, TX_VER);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(TX_STORE)) {
+        const store = db.createObjectStore(TX_STORE, { keyPath: 'key' });
+        store.createIndex('addedAt', 'addedAt', { unique: false });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return txDbPromise;
+}
+
+async function txCacheGet(key) {
+  try {
+    const db = await openTxDb();
+    return await new Promise((resolve) => {
+      const tx = db.transaction(TX_STORE, 'readonly');
+      const req = tx.objectStore(TX_STORE).get(key);
+      req.onsuccess = () => resolve(req.result?.translation || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch (_) { return null; }
+}
+
+async function txCacheSet(key, translation) {
+  try {
+    const db = await openTxDb();
+    await new Promise((resolve) => {
+      const tx = db.transaction(TX_STORE, 'readwrite');
+      const store = tx.objectStore(TX_STORE);
+      store.put({ key, translation, addedAt: Date.now() });
+      const countReq = store.count();
+      countReq.onsuccess = () => {
+        if (countReq.result <= TX_MAX) return;
+        /* 超限：删最旧的 (countReq.result - TX_MAX) 条 */
+        const toDelete = countReq.result - TX_MAX;
+        const idx = store.index('addedAt');
+        const cur = idx.openCursor();
+        let deleted = 0;
+        cur.onsuccess = () => {
+          const cursor = cur.result;
+          if (!cursor || deleted >= toDelete) return;
+          store.delete(cursor.primaryKey);
+          deleted++;
+          cursor.continue();
+        };
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
+    });
+  } catch (_) { /* 缓存写失败不影响翻译本身 */ }
 }
 
 /* DeepSeek-family endpoints must disable thinking: V4 Flash is a reasoning
