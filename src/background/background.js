@@ -48,7 +48,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     IFLL_AI_TRANSLATE: () => handleAiTranslate(message.text, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_SEL_TOOLBAR: () => handleSelToolbar(message.action, message.text, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_CUSTOM_ACTION: () => handleCustomAction(message.action, message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
-    IFLL_BATCH_DEEP: () => handleBatchDeep(message.words, message.apiKey, message.apiEndpoint, message.apiModel),
+    IFLL_BATCH_DEEP: () => handleBatchDeep(message.words, message.apiKey, message.apiEndpoint, message.apiModel, message.requestId),
+    IFLL_BATCH_ABORT: () => abortBatch(message.requestId),
     IFLL_AI_DEEP_ANALYSIS: () => handleDeepAnalysis(message.en, message.zh, message.def, message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_TEST_API: () => testApiConnection(message.apiKey, message.apiEndpoint, message.apiModel),
     IFLL_LIST_MODELS: () => listModels(message.apiKey, message.apiEndpoint),
@@ -135,11 +136,20 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 });
 
-/* ---- Shared fetch with timeout (default 25s, overridable for batch) ---- */
-async function apiFetch(endpoint, path, headers, body, timeout = 25000) {
+/* ---- Shared fetch with timeout (default 25s, overridable for batch) ----
+   externalSignal lets callers really cancel an in-flight request (batch stop):
+   sendMessage has no native cancellation, so the popup relays an out-of-band
+   IFLL_BATCH_ABORT with the requestId; the handler aborts this controller and
+   the upstream fetch dies instead of burning tokens to completion. */
+async function apiFetch(endpoint, path, headers, body, timeout = 25000, externalSignal) {
   const baseUrl = (endpoint || 'https://api.deepseek.com').replace(/\/+$/, '');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
+  const onExternalAbort = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort();
+    else externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+  }
   try {
     return await fetch(baseUrl + path, {
       method: body ? 'POST' : 'GET',
@@ -147,7 +157,22 @@ async function apiFetch(endpoint, path, headers, body, timeout = 25000) {
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal
     });
-  } finally { clearTimeout(timer); }
+  } finally {
+    clearTimeout(timer);
+    if (externalSignal) externalSignal.removeEventListener('abort', onExternalAbort);
+  }
+}
+
+/* ---- Batch abort registry: requestId → AbortController ----
+   Popup's 停止 fires IFLL_BATCH_ABORT; without this the in-flight merged
+   chunk (up to 95s) would run to completion and still write cache. */
+const batchControllers = new Map();
+
+function abortBatch(requestId) {
+  if (!requestId) return Promise.resolve({ aborted: true });
+  const c = batchControllers.get(requestId);
+  if (c) { c.abort(); batchControllers.delete(requestId); }
+  return Promise.resolve({ aborted: true });
 }
 
 /* DeepSeek-family endpoints must disable thinking: V4 Flash is a reasoning
@@ -424,18 +449,26 @@ async function handleSelToolbar(action, text, apiKey, apiEndpoint, apiModel) {
 }
 
 /* Batch deep analysis: N words in one API call */
-async function handleBatchDeep(words, apiKey, apiEndpoint, apiModel) {
+async function handleBatchDeep(words, apiKey, apiEndpoint, apiModel, requestId) {
   if (!apiKey || !words?.length) return { error: words ? "no api key" : "no words" };
+  /* Register the abort controller so 停止 can really cancel this request */
+  const controller = new AbortController();
+  if (requestId) batchControllers.set(requestId, controller);
   try {
     const wordList = words.map(w => '"' + w.en + '" (' + w.zh + ")").join(", ");
     const prompt = 'Lexicographer analysis. Accuracy > quantity — empty arrays are better than wrong data. Return ONLY JSON: {"results":[{"word":"...","synonyms":["s"],"antonyms":[],"collocations":[],"usage":"Chinese note","examples":[{"en":"short natural sentence","cn":"地道中文, **词**加粗"}]}]}. Exactly 1 short example per word.';
     const resp = await apiFetch(apiEndpoint, "/chat/completions", {
       "Content-Type": "application/json", "Authorization": "Bearer " + apiKey
-    }, { model: apiModel || "deepseek-v4-flash", messages: [{ role: "system", content: prompt }, { role: "user", content: "Words: " + wordList }], max_tokens: 5000, temperature: 0.4, ...(isDeepSeekLike(apiEndpoint, apiModel) ? { thinking: { type: 'disabled' } } : {}) }, 90000);
+    }, { model: apiModel || "deepseek-v4-flash", messages: [{ role: "system", content: prompt }, { role: "user", content: "Words: " + wordList }], max_tokens: 5000, temperature: 0.4, ...(isDeepSeekLike(apiEndpoint, apiModel) ? { thinking: { type: 'disabled' } } : {}) }, 90000, controller.signal);
     if (!resp.ok) return { error: "HTTP " + resp.status };
     const dt = await resp.json(); const ct = getContent(dt);
     if (!ct) return { error: "empty response" };
     const p = extractJson(ct);
     return p?.results ? { results: p.results } : { error: "cannot parse" };
-  } catch (e) { return { error: e.message }; }
+  } catch (e) {
+    /* 停止/超时：abort 后返回明确错误，popup 侧 batchAbort 已置位，不再发起下一块 */
+    return { error: e.name === 'AbortError' ? '已停止' : e.message };
+  } finally {
+    if (requestId) batchControllers.delete(requestId);
+  }
 }

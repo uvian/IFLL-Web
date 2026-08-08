@@ -392,6 +392,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   /* ── Batch deep analysis pre-processing ── */
   let batchAbort = false;
+  let batchRequestId = null;   /* 当前批次的请求标识，停止时用于带外中止 */
   document.getElementById('batchStart').addEventListener('click', async () => {
     const count = Math.max(10, Math.min(1000, parseInt(document.getElementById('batchCount').value) || 100));
     const startBtn = document.getElementById('batchStart');
@@ -404,6 +405,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!s.apiKey) { startBtn.textContent = '请先配置 API Key'; setTimeout(() => { startBtn.textContent = '开始'; }, 2000); return; }
 
     batchAbort = false;
+    batchRequestId = crypto.randomUUID ? crypto.randomUUID() : 'batch_' + Date.now().toString(36);
     startBtn.style.display = 'none';
     stopBtn.style.display = 'inline-block';
     progEl.style.display = 'flex';
@@ -455,7 +457,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, 150);
         try {
           const result = await Promise.race([
-            chrome.runtime.sendMessage({ type: 'IFLL_BATCH_DEEP', words: chunk, apiKey: ak, apiEndpoint: ep, apiModel: mdl }),
+            chrome.runtime.sendMessage({ type: 'IFLL_BATCH_DEEP', words: chunk, apiKey: ak, apiEndpoint: ep, apiModel: mdl, requestId: batchRequestId }),
             new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 95000))
           ]);
           if (result && !result.error && Array.isArray(result.results)) {
@@ -516,5 +518,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('batchStop').addEventListener('click', () => {
     batchAbort = true;
+    /* 带外中止：让 SW 真的掐断在途请求，而不是等它跑完（≤95s）再丢弃 */
+    if (batchRequestId) {
+      chrome.runtime.sendMessage({ type: 'IFLL_BATCH_ABORT', requestId: batchRequestId }).catch(() => {});
+    }
   });
 });
